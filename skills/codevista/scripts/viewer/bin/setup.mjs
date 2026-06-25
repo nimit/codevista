@@ -16,7 +16,7 @@ const VENDOR = join(PKG, "vendor");
 
 const MAJOR = Number(process.versions.node.split(".")[0]);
 if (MAJOR < 18) {
-  console.error(`local-viewer needs Node >= 18 (found ${process.version}). Upgrade Node and re-run \`npm run setup\`.`);
+  console.error(`codevista-viewer needs Node >= 18 (found ${process.version}). Upgrade Node and re-run \`npm run setup\`.`);
   process.exit(1);
 }
 

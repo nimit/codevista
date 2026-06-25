@@ -1,4 +1,4 @@
-# local-viewer
+# codevista-viewer
 
 Zero-dependency local renderer for visual plans and recaps. No hosted server,
 no MCP, no network at runtime.

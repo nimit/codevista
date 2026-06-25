@@ -9,7 +9,7 @@ import { parse } from "../src/parse.js";
 import { render } from "../src/render.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PKG = resolve(__dirname, "..");           // local-viewer/
+const PKG = resolve(__dirname, "..");           // scripts/viewer/
 const STATIC_ROOTS = { "/viewer.css": join(PKG, "web", "viewer.css") };
 const STATIC_DIRS = { "/src/": join(PKG, "src"), "/vendor/": join(PKG, "vendor"), "/web/": join(PKG, "web") };
 const MIME = { ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
@@ -145,7 +145,7 @@ export async function buildStandalone(srcPath) {
 function checkEnv() {
   const major = Number(process.versions.node.split(".")[0]);
   if (major < 18) {
-    console.error(`local-viewer needs Node >= 18 (found ${process.version}).`);
+    console.error(`codevista-viewer needs Node >= 18 (found ${process.version}).`);
     process.exit(1);
   }
   const required = ["marked.esm.js", "purify.es.mjs"];

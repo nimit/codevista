@@ -2,5 +2,5 @@
 # Mark them so they don't pollute PR diffs or GitHub's language statistics.
 # `linguist-vendored` -> excluded from language stats and flagged as vendored.
 # `-diff`             -> git shows "Binary files differ" instead of a huge diff.
-local-viewer/vendor/*.js   linguist-vendored -diff
-local-viewer/vendor/*.mjs  linguist-vendored -diff
+skills/codevista/scripts/viewer/vendor/*.js   linguist-vendored -diff
+skills/codevista/scripts/viewer/vendor/*.mjs  linguist-vendored -diff
