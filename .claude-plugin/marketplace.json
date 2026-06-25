@@ -1,0 +1,19 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "codevista",
+  "description": "Local, zero-dependency visual plans and recaps for coding agents.",
+  "owner": {
+    "name": "Nimit Shah"
+  },
+  "plugins": [
+    {
+      "name": "codevista",
+      "description": "Author rich, interactive, commentable visual plans and recaps rendered fully locally in the browser — no MCP, no hosted server, no network at runtime.",
+      "author": {
+        "name": "Nimit Shah"
+      },
+      "category": "development",
+      "source": "./"
+    }
+  ]
+}

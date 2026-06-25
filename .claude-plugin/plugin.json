@@ -1,0 +1,20 @@
+{
+  "name": "codevista",
+  "displayName": "CodeVista",
+  "description": "Local, zero-runtime-dependency visual plans and recaps. The agent writes a compact Markdown-superset file; a bundled Node server renders it as a rich, interactive, commentable view in the browser — entirely on 127.0.0.1, no MCP, no network.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Nimit Shah"
+  },
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "visual-plan",
+    "visual-recap",
+    "code-review",
+    "local-first",
+    "zero-dependency",
+    "agent-workflows"
+  ],
+  "skills": "./skills/"
+}

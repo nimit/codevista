@@ -1,0 +1,9 @@
+node_modules/
+*.log
+
+# reviewer feedback sidecars are generated next to plan/recap sources
+comments.json
+
+# authored outputs (the skill writes here at runtime)
+plans/
+recaps/

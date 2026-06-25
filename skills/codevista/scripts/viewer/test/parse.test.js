@@ -1,0 +1,131 @@
+// test/parse.test.js
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { tokenize, parseAttrs } from "../src/parse.js";
+import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel } from "../src/blocks.js";
+import { parse } from "../src/parse.js";
+
+test("parseAttrs handles bare flags, key=value, and quoted values", () => {
+  const a = parseAttrs('surface=browser label="Sign in" skeleton=true');
+  assert.equal(a.surface, "browser");
+  assert.equal(a.label, "Sign in");
+  assert.equal(a.skeleton, "true");
+});
+
+test("tokenize separates markdown, fences, and directives", () => {
+  const src = [
+    "# Title",
+    "",
+    "Some prose.",
+    "",
+    "```diff file=a.ts summary=\"x\"",
+    "-old",
+    "+new",
+    "```",
+    "",
+    ":::columns",
+    "```wireframe surface=mobile label=\"Before\"",
+    "<div>a</div>",
+    "```",
+    ":::",
+  ].join("\n");
+  const segs = tokenize(src);
+  assert.equal(segs[0].kind, "md");
+  assert.match(segs[0].text, /# Title/);
+  const fence = segs.find((s) => s.kind === "fence");
+  assert.equal(fence.type, "diff");
+  assert.equal(fence.attrs.file, "a.ts");
+  assert.equal(fence.body, "-old\n+new");
+  const dir = segs.find((s) => s.kind === "dir");
+  assert.equal(dir.type, "columns");
+  assert.match(dir.inner, /wireframe surface=mobile/);
+});
+
+test("parseDiff classifies +/-/context lines into hunks", () => {
+  const node = parseDiff(
+    { file: "auth.ts", lang: "ts", summary: "add refresh" },
+    "@@ -1,2 +1,3 @@\n const a = 1\n-const b = 2\n+const b = 3\n+const c = 4",
+    "d1"
+  );
+  assert.equal(node.type, "diff");
+  assert.equal(node.file, "auth.ts");
+  assert.equal(node.summary, "add refresh");
+  const kinds = node.hunks[0].lines.map((l) => l.kind);
+  assert.deepEqual(kinds, ["ctx", "del", "add", "add"]);
+});
+
+test("parseFileTree reads glyphs, depth, rename, and notes", () => {
+  const node = parseFileTree(
+    {},
+    [
+      "+ src/auth/session.ts   new store",
+      "  ~ src/auth/login.ts   wire refresh",
+      "> src/old.ts -> src/new.ts   renamed",
+    ].join("\n"),
+    "ft1"
+  );
+  assert.equal(node.entries[0].change, "added");
+  assert.equal(node.entries[0].path, "src/auth/session.ts");
+  assert.equal(node.entries[0].note, "new store");
+  assert.equal(node.entries[1].depth, 1);
+  assert.equal(node.entries[2].change, "renamed");
+  assert.equal(node.entries[2].to, "src/new.ts");
+});
+
+test("parseDataModel reads entities, change flags, fields and was:", () => {
+  const node = parseDataModel(
+    {},
+    [
+      "entity Session [added]",
+      "  id: uuid [pk]",
+      "  userId: uuid [modified] (was: string) -- now FK",
+      "entity User",
+      "  email: text",
+    ].join("\n"),
+    "dm1"
+  );
+  assert.equal(node.entities.length, 2);
+  assert.equal(node.entities[0].name, "Session");
+  assert.equal(node.entities[0].change, "added");
+  const f = node.entities[0].fields[1];
+  assert.equal(f.name, "userId");
+  assert.equal(f.change, "modified");
+  assert.equal(f.was, "string");
+  assert.equal(f.note, "now FK");
+});
+
+test("parse builds full AST with containers and stable ids", () => {
+  const src = [
+    "---", "title: T", "kind: plan", "---",
+    "Intro prose.",
+    ":::columns",
+    "```wireframe surface=mobile label=\"Before\"",
+    "<div>a</div>",
+    "```",
+    "```wireframe surface=mobile label=\"After\"",
+    "<div>b</div>",
+    "```",
+    ":::",
+  ].join("\n");
+  const { meta, blocks } = parse(src);
+  assert.equal(meta.title, "T");
+  assert.equal(meta.kind, "plan");
+  assert.equal(blocks[0].type, "richtext");
+  assert.equal(blocks[1].type, "columns");
+  assert.equal(blocks[1].columns.length, 2);
+  assert.equal(blocks[1].columns[0].label, "Before");
+  assert.equal(blocks[1].columns[0].blocks[0].type, "wireframe");
+  assert.ok(blocks[1].id); // stable id present
+  assert.equal(blocks[1].wide, false); // mobile is narrow
+});
+
+test("columns with desktop surface marks wide=true", () => {
+  const src = [
+    ":::columns",
+    "```wireframe surface=desktop label=\"Before\"", "<div>a</div>", "```",
+    "```wireframe surface=desktop label=\"After\"", "<div>b</div>", "```",
+    ":::",
+  ].join("\n");
+  const { blocks } = parse(src);
+  assert.equal(blocks[0].wide, true);
+});

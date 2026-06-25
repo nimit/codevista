@@ -1,0 +1,15 @@
+{
+  "name": "local-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local, zero-dependency renderer for visual plans and recaps.",
+  "bin": { "visual-local": "bin/server.js" },
+  "scripts": {
+    "test": "node --test",
+    "start": "node bin/server.js",
+    "setup": "node bin/setup.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
