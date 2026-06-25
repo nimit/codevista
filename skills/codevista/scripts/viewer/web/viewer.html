@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Visual plan</title>
+  <script>
+    // Set the theme before first paint so dark mode (the default) never flashes light.
+    document.documentElement.dataset.theme = localStorage.getItem("lv-theme") || "dark";
+  </script>
   <link rel="stylesheet" href="/viewer.css" />
 </head>
 <body>

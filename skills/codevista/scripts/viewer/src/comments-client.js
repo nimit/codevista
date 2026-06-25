@@ -32,7 +32,7 @@ export async function mountComments(root) {
       list.className = "comment-list";
       list.innerHTML = existing.map((c) =>
         `<div class="comment ${c.status}"><div class="c-text"></div>
-         <div class="c-meta">${c.target}${c.status === "resolved" ? " · resolved" : ""}</div></div>`
+         <div class="c-meta"><span class="c-tag">${c.target === "agent" ? "For agent" : "Note"}</span>${c.status === "resolved" ? '<span class="c-resolved">Resolved</span>' : ""}</div></div>`
       ).join("");
       // set text safely
       list.querySelectorAll(".c-text").forEach((el, i) => (el.textContent = existing[i].text));
@@ -46,8 +46,13 @@ export async function mountComments(root) {
     const sel = window.getSelection && String(window.getSelection());
     box.innerHTML =
       `<textarea rows="3" placeholder="What should change here?"></textarea>
-       <label class="wf-muted"><input type="checkbox" checked> for agent</label>
-       <div><button class="primary c-save">Comment</button><button class="c-cancel">Cancel</button></div>`;
+       <div class="cc-row">
+         <label class="cc-toggle"><input type="checkbox" checked> Send to agent</label>
+         <div class="cc-actions">
+           <button class="c-cancel">Cancel</button>
+           <button class="primary c-save">Comment</button>
+         </div>
+       </div>`;
     block.appendChild(box);
     box.querySelector("textarea").focus();
     box.querySelector(".c-cancel").onclick = () => box.remove();

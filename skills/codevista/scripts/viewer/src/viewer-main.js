@@ -58,7 +58,7 @@ function wireTabs() {
 document.getElementById("theme").onclick = () =>
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 
-applyTheme(localStorage.getItem("lv-theme") || "light");
+applyTheme(localStorage.getItem("lv-theme") || "dark");
 load(false);
 
 // live reload via SSE

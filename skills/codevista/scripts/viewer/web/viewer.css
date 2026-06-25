@@ -30,10 +30,14 @@ body {
 /* ---- block envelope + comment affordance ---- */
 .block{ position:relative; margin:18px 0; }
 .block:hover > .comment-tab{ opacity:1; }
-.comment-tab{ position:absolute; top:0; right:-40px; opacity:0; transition:.15s;
-  border:1.4px solid var(--wf-line); background:var(--wf-card); border-radius:8px;
-  width:30px; height:30px; cursor:pointer; }
-.block.has-comments .comment-tab{ opacity:1; border-color:var(--wf-accent); color:var(--wf-accent); }
+.comment-tab{ position:absolute; top:0; right:-40px; opacity:0;
+  transition:opacity .15s, color .15s, background .15s, border-color .15s;
+  display:flex; align-items:center; justify-content:center;
+  border:1.4px solid var(--wf-line); background:var(--wf-card); color:var(--wf-muted);
+  border-radius:8px; width:30px; height:30px; font-size:14px; line-height:1; cursor:pointer; }
+.comment-tab:hover{ border-color:var(--wf-accent); color:var(--wf-accent); background:var(--wf-accent-soft); }
+.block.has-comments .comment-tab{ opacity:1; border-color:var(--wf-accent); color:var(--wf-accent);
+  background:var(--wf-accent-soft); font-weight:700; }
 
 /* ---- helper classes authors use (wireframe kit) ---- */
 .wf-card,.wf-box{ background:var(--wf-card); border:1.4px solid var(--wf-line);
@@ -148,10 +152,34 @@ body {
 .topbar button{ border:1.4px solid var(--wf-line); background:var(--wf-card); border-radius:8px; padding:6px 10px; cursor:pointer; color:inherit; }
 .reload-flash{ animation:flash .6s; } @keyframes flash{ from{ background:var(--wf-accent-soft);} to{ background:transparent; } }
 
-/* ---- comment composer + list (Task 7) ---- */
-.comment-list{ margin-top:8px; display:flex; flex-direction:column; gap:6px; }
-.comment{ border:1.4px solid var(--wf-line); border-left:3px solid var(--wf-accent); border-radius:8px; padding:6px 10px; font-size:13px; }
-.comment.resolved{ opacity:.55; border-left-color:var(--wf-ok); }
-.c-meta{ color:var(--wf-muted); font-size:.85em; }
-.comment-composer{ margin-top:8px; display:flex; flex-direction:column; gap:6px; }
-.comment-composer textarea{ width:100%; font:inherit; border:1.4px solid var(--wf-line); border-radius:8px; padding:6px; }
+/* ---- comment composer + list ---- */
+.comment-list{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+.comment{ background:var(--wf-card); border:1.4px solid var(--wf-line);
+  border-left:3px solid var(--wf-accent); border-radius:var(--wf-radius);
+  padding:8px 12px; font-size:13px; line-height:1.5; }
+.comment.resolved{ opacity:.6; border-left-color:var(--wf-ok); }
+.c-text{ white-space:pre-wrap; }
+.c-meta{ display:flex; align-items:center; gap:8px; margin-top:6px;
+  color:var(--wf-muted); font-size:.8em; }
+.c-tag{ display:inline-flex; align-items:center; padding:1px 8px; border-radius:999px;
+  background:var(--wf-accent-soft); color:var(--wf-accent); font-weight:600; }
+.c-resolved{ display:inline-flex; align-items:center; color:var(--wf-ok); font-weight:600; }
+.comment.resolved .c-tag{ background:none; color:var(--wf-muted); }
+
+.comment-composer{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+.comment-composer textarea{ width:100%; font:inherit; color:inherit; resize:vertical;
+  background:var(--wf-paper); border:1.4px solid var(--wf-line); border-radius:8px; padding:8px 10px; }
+.comment-composer textarea::placeholder{ color:var(--wf-muted); }
+.comment-composer textarea:focus{ outline:none; border-color:var(--wf-accent);
+  box-shadow:0 0 0 3px var(--wf-accent-soft); }
+.cc-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.cc-toggle{ display:inline-flex; align-items:center; gap:6px; color:var(--wf-muted);
+  font-size:13px; cursor:pointer; user-select:none; }
+.cc-toggle input{ accent-color:var(--wf-accent); margin:0; }
+.cc-actions{ display:flex; gap:8px; }
+.comment-composer button{ font:inherit; cursor:pointer; border-radius:8px; padding:6px 14px;
+  border:1.4px solid var(--wf-line); background:var(--wf-card); color:inherit; transition:.12s; }
+.comment-composer button:hover{ border-color:var(--wf-accent); color:var(--wf-accent); }
+.comment-composer button.primary{ background:var(--wf-accent); color:var(--wf-accent-fg);
+  border-color:var(--wf-accent); }
+.comment-composer button.primary:hover{ filter:brightness(1.08); color:var(--wf-accent-fg); }

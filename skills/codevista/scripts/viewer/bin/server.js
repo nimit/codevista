@@ -134,7 +134,7 @@ export async function buildStandalone(srcPath) {
   const { marked } = await import(join(PKG, "vendor", "marked.esm.js"));
   const { blocks, meta } = parse(source);
   const body = render(blocks, { md: (s) => marked.parse(s) }); // sanitize = regex fallback
-  return `<!doctype html><html><head><meta charset="utf-8">
+  return `<!doctype html><html data-theme="dark"><head><meta charset="utf-8">
 <title>${meta.title || "Visual plan"}</title><style>${css}</style></head>
 <body><div class="topbar"><span class="title">${meta.title || ""}</span></div>
 <main class="doc">${body}</main></body></html>`;
