@@ -149,6 +149,31 @@ export function parseQuestionForm(attrs, body, id) {
   return { type: "question-form", id, title: attrs.title || "Open Questions", questions };
 }
 
+export function parseTask(attrs, body, id) {
+  const fields = { title: "", outcome: "", verify: "", scope: "", constraints: "", notes: "" };
+  let dependsOn = [];
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^([\w-]+):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    const val = m[2].trim();
+    if (key === "depends-on") dependsOn = val.split(/[\s,]+/).filter(Boolean);
+    else if (Object.prototype.hasOwnProperty.call(fields, key)) fields[key] = val;
+  }
+  return {
+    type: "task", id,
+    status: attrs.status || "pending",
+    risk: attrs.risk || "normal",
+    title: fields.title, outcome: fields.outcome, verify: fields.verify,
+    scope: fields.scope || null,
+    dependsOn,
+    constraints: fields.constraints || null,
+    notes: fields.notes || null,
+  };
+}
+
 export const LEAF_PARSERS = {
   diff: parseDiff,
   "file-tree": parseFileTree,

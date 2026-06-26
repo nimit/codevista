@@ -200,3 +200,25 @@ body {
 .comment-composer button.primary{ background:var(--wf-accent); color:var(--wf-accent-fg);
   border-color:var(--wf-accent); }
 .comment-composer button.primary:hover{ filter:brightness(1.08); color:var(--wf-accent-fg); }
+
+/* ---- task cards ---- */
+.task-card{ margin:8px 0; }
+.task-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.task-title{ font-weight:700; font-size:15px; flex:1; min-width:0; }
+.task-badge{ flex:none; font-size:.72em; text-transform:uppercase; letter-spacing:.04em;
+  padding:2px 8px; border-radius:999px; border:1.4px solid var(--wf-line);
+  background:var(--wf-card); color:var(--wf-muted); }
+.task-badge[data-status="running"]{ border-color:var(--wf-accent); color:var(--wf-accent); background:var(--wf-accent-soft); }
+.task-badge[data-status="done"]{ border-color:var(--wf-ok); color:var(--wf-ok); }
+.task-badge[data-status="blocked"]{ border-color:var(--wf-warn); color:var(--wf-warn); }
+.task-risk{ flex:none; font-size:.72em; padding:1px 6px; border-radius:999px;
+  background:var(--wf-del-soft); color:var(--wf-del-ink); }
+.task-row{ display:flex; gap:8px; margin:3px 0; font-size:.92em; }
+.task-key{ flex:none; width:84px; color:var(--wf-muted); text-align:right; }
+.task-val{ flex:1; min-width:0; }
+.task-val code{ background:var(--wf-accent-soft); padding:1px 5px; border-radius:6px; font-size:.9em; }
+
+/* card-level status accents — the Phase-1 task-status-<status> hook, lit during execution */
+.task-status-running{ box-shadow:inset 3px 0 0 var(--wf-accent); }
+.task-status-done{ box-shadow:inset 3px 0 0 var(--wf-ok); opacity:.78; }
+.task-status-blocked{ box-shadow:inset 3px 0 0 var(--wf-warn); }

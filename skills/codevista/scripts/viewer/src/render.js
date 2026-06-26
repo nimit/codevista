@@ -48,6 +48,8 @@ export function renderBlock(node, opts) {
       return renderColumns(node, opts);
     case "question-form":
       return renderQuestionForm(node);
+    case "task":
+      return renderTask(node);
     default:
       return `<pre>${escapeHtml(JSON.stringify(node))}</pre>`;
   }
@@ -199,6 +201,24 @@ function renderQuestionForm(node) {
     return `<div class="qf-q" data-q="${qi}" data-kind="${escapeHtml(q.kind)}"><div class="qf-text">${escapeHtml(q.text)}</div><div class="qf-options">${opts}${customOpt}</div>${writein}</div>`;
   }).join("");
   return `<div class="question-form wf-card"><div class="qf-title">${escapeHtml(node.title)}</div>${qs}</div>`;
+}
+
+function renderTask(node) {
+  const row = (k, v) => `<div class="task-row"><span class="task-key">${k}</span><span class="task-val">${v}</span></div>`;
+  const rows = [
+    row("outcome", escapeHtml(node.outcome)),
+    row("verify", escapeHtml(node.verify)),
+  ];
+  if (node.scope) rows.push(row("scope", escapeHtml(node.scope)));
+  if (node.dependsOn && node.dependsOn.length)
+    rows.push(row("depends on", node.dependsOn.map((d) => `<code>${escapeHtml(d)}</code>`).join(" ")));
+  if (node.constraints) rows.push(row("constraints", escapeHtml(node.constraints)));
+  if (node.notes) rows.push(row("notes", escapeHtml(node.notes)));
+  const risk = node.risk === "high" ? ` <span class="task-risk">high risk</span>` : "";
+  return `<div class="task-card wf-card task-status-${escapeHtml(node.status)}">
+    <div class="task-head"><span class="task-badge" data-status="${escapeHtml(node.status)}">${escapeHtml(node.status)}</span><span class="task-title">${escapeHtml(node.title)}</span>${risk}</div>
+    ${rows.join("")}
+  </div>`;
 }
 
 export function render(blocks, opts = {}) {

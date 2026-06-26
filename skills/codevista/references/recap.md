@@ -3,6 +3,11 @@
 Summarize a diff as a local visual recap rendered by the bundled viewer. No
 hosted Plan MCP, no `@agent-native/core`, no network. Never dump the recap inline.
 
+This is also the **post-execution review surface**: when an `execute` loop finishes
+(every `:::task` is `done`), generate the recap from the full real `git diff` of
+the executed work — the human's code-review entry point, paired with the live
+status dashboard. The true-by-construction grounding rule below applies unchanged.
+
 ## Workflow
 
 1. Collect the diff with plain git: `git diff --stat <base>...HEAD`,

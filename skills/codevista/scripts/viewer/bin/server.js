@@ -67,6 +67,23 @@ export function applyAnswer(source, { blockId, questionIndex, kind, selected = [
   return lines.join("\n");
 }
 
+// Advance a :::task's status by rewriting the `status=` token on its opening
+// directive line (located by id via locate()). Pure + exported so it is
+// unit-testable; the CLI (--set-status) validates the allowed status set, so this
+// stays faithful and writes whatever it is told. Returns source unchanged when the
+// id is not a :::task block.
+export function applyStatus(source, { taskId, status }) {
+  const loc = locate(source, taskId);
+  if (!loc || loc.type !== "task") return source;
+  const lines = source.split(/\r?\n/);
+  const line = lines[loc.startLine];
+  const re = /\bstatus=("[^"]*"|'[^']*'|\S+)/;
+  lines[loc.startLine] = re.test(line)
+    ? line.replace(re, `status=${status}`)
+    : `${line.replace(/\s+$/, "")} status=${status}`;
+  return lines.join("\n");
+}
+
 function send(res, status, body, type = "text/plain") {
   res.writeHead(status, { "content-type": type, "cache-control": "no-store" });
   res.end(body);
@@ -229,6 +246,7 @@ Arguments:
 Options:
   --open               Open the served URL in your default browser.
   --export <file>      Write a standalone HTML file and exit (no server).
+  --set-status <id>=<s> Set a :::task's status (pending|running|done|blocked) and exit.
   --port <n>           Preferred port (default: 4321; auto-increments if taken).
   --host <addr>        Bind address (default: 127.0.0.1).
   --kind <plan|recap>  Override document kind (default: inferred from filename).
@@ -238,6 +256,7 @@ Examples:
   server.js plans/feature.plan.md --open
   server.js recaps/branch.recap.md --port 5000
   server.js plans/feature.plan.md --export plan.html
+  server.js plans/feat/feat.plan.md --set-status auth-mw=done
 
 Exit codes: 0 success · 1 bad usage / missing file / unmet runtime requirement.`;
 
@@ -269,6 +288,22 @@ function main() {
       process.exit(0);
     });
     return;
+  }
+
+  const setStatus = get("--set-status", null);
+  if (setStatus) {
+    const eq = setStatus.indexOf("=");
+    const taskId = eq >= 0 ? setStatus.slice(0, eq) : "";
+    const status = eq >= 0 ? setStatus.slice(eq + 1) : "";
+    const ALLOWED = ["pending", "running", "done", "blocked"];
+    if (!taskId || !ALLOWED.includes(status)) {
+      console.error(`--set-status expects <task-id>=<${ALLOWED.join("|")}>`);
+      process.exit(1);
+    }
+    const abs = resolve(srcPath);
+    writeFileSync(abs, applyStatus(readFileSync(abs, "utf8"), { taskId, status }));
+    console.log(`Set ${taskId} -> ${status} in ${abs}`);
+    process.exit(0);
   }
 
   const server = createServer({ srcPath: resolve(srcPath), kind });

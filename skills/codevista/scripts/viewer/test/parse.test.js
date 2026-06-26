@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tokenize, parseAttrs, locate } from "../src/parse.js";
-import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm } from "../src/blocks.js";
+import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm, parseTask } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
 test("parseAttrs handles bare flags, key=value, and quoted values", () => {
@@ -166,4 +166,56 @@ test("columns with desktop surface marks wide=true", () => {
   ].join("\n");
   const { blocks } = parse(src);
   assert.equal(blocks[0].wide, true);
+});
+
+test("parseTask reads attrs, fields, and the depends-on list", () => {
+  const node = parseTask(
+    { status: "running", risk: "high" },
+    [
+      "title: Auth middleware rejects invalid sessions",
+      "outcome: requests without a valid session get a 401",
+      "verify: `npm test auth`; manually hit /api with no cookie",
+      "scope: src/middleware/auth.ts",
+      "depends-on: session-store, config",
+      "constraints: use the existing Session type",
+      "notes: the store is async",
+    ].join("\n"),
+    "t1"
+  );
+  assert.equal(node.type, "task");
+  assert.equal(node.id, "t1");
+  assert.equal(node.status, "running");
+  assert.equal(node.risk, "high");
+  assert.equal(node.title, "Auth middleware rejects invalid sessions");
+  assert.equal(node.outcome, "requests without a valid session get a 401");
+  assert.match(node.verify, /npm test auth/);
+  assert.equal(node.scope, "src/middleware/auth.ts");
+  assert.deepEqual(node.dependsOn, ["session-store", "config"]);
+  assert.equal(node.constraints, "use the existing Session type");
+  assert.equal(node.notes, "the store is async");
+});
+
+test("parseTask defaults status/risk and nulls absent optional fields", () => {
+  const node = parseTask({}, "title: T\noutcome: O\nverify: V", "t2");
+  assert.equal(node.status, "pending");
+  assert.equal(node.risk, "normal");
+  assert.equal(node.scope, null);
+  assert.deepEqual(node.dependsOn, []);
+  assert.equal(node.constraints, null);
+  assert.equal(node.notes, null);
+});
+
+test("parse wires :::task directives into task nodes with stable ids", () => {
+  const src = [
+    ":::task id=auth-mw status=pending",
+    "title: Auth middleware",
+    "outcome: 401 on missing session",
+    "verify: npm test auth",
+    ":::",
+  ].join("\n");
+  const { blocks } = parse(src);
+  assert.equal(blocks[0].type, "task");
+  assert.equal(blocks[0].id, "auth-mw");
+  assert.equal(blocks[0].status, "pending");
+  assert.equal(blocks[0].title, "Auth middleware");
 });

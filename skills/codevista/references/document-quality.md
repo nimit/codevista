@@ -114,6 +114,35 @@ there is no catalog lookup):
   visual unless the tab is intentionally document-only.
 - `table`, `checklist`, `callout` for scannable structure.
 
+**Plan the work as tasks, sized for a reviewer.** A serious plan ends in an
+ordered set of `:::task` blocks — the executable units. Before writing them, map
+the files and responsibilities the work touches; split by responsibility, not by
+technical layer, and keep files that change together together. Then draw task
+boundaries so each task is the smallest unit worth an independent review gate:
+fold setup, scaffolding, and docs into the task whose deliverable needs them, and
+split only where a reviewer could meaningfully accept one task while rejecting its
+neighbor. Each task carries human-readable intent, never pre-baked code:
+
+- `title` / `outcome` / `verify` are required. `outcome` states what "done" looks
+  like; `verify` is the concrete check (a command and/or a manual step). These two
+  are the contract the work is held to — make them specific and checkable, never
+  "make it work".
+- `scope` anchors the implementer to the right files/area. `constraints` pins the
+  load-bearing or hard-to-reverse decisions (schema, wire format, auth, ids,
+  "reuse the existing X") so they are not improvised. `notes` carries gotchas.
+- Interfaces between tasks are **discovered, not declared**: the implementer reads
+  the real, already-committed code from earlier tasks rather than trusting a
+  hand-written signature. Use `depends-on` to express real ordering; add an
+  interface hint in `notes` only when it genuinely saves a lookup.
+- `risk=high` marks a task whose decisions are load-bearing or hard to reverse, so
+  review pays it extra attention.
+
+State the testing posture once in the plan's overview as a global line — **TDD
+where a test harness exists for the area; otherwise implement against the task's
+`verify`** — and let each task's `verify` make it concrete. Do not enumerate the
+same tasks twice (a prose walkthrough above and task cards below); the cards are
+the task narrative.
+
 **Open questions live at the bottom as a form when answers would change the
 plan.** Surface answerable unresolved decisions in a final `question-form`
 block titled "Open Questions" so the renderer presents it as a distinct section.

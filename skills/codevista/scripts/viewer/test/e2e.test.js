@@ -1,12 +1,13 @@
 // test/e2e.test.js
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "../src/parse.js";
 import { render } from "../src/render.js";
-import { createServer, resolveCommentsPath } from "../bin/server.js";
+import { createServer, resolveCommentsPath, applyStatus } from "../bin/server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = join(here, "..", "fixtures", "sample.plan.md");
@@ -39,4 +40,25 @@ test("server serves the fixture and stores a comment", async () => {
   const base = `http://127.0.0.1:${server.address().port}`;
   const content = await (await fetch(`${base}/content`)).json();
   assert.match(content.source, /Refresh-token auth/);
+});
+
+test("a status transition in the file is reflected in served /content", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "exec.plan.md");
+  writeFileSync(src, [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n"));
+  const server = createServer({ srcPath: src, kind: "plan" });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  let content = await (await fetch(`${base}/content`)).json();
+  assert.match(content.source, /status=pending/);
+
+  // the executor advances the task's status in the served file
+  writeFileSync(src, applyStatus(readFileSync(src, "utf8"), { taskId: "t1", status: "running" }));
+
+  content = await (await fetch(`${base}/content`)).json();
+  assert.match(content.source, /status=running/);
+  const { blocks } = parse(content.source);
+  assert.equal(blocks.find((b) => b.id === "t1").status, "running");
 });

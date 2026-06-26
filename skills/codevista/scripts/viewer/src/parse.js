@@ -1,5 +1,5 @@
 // src/parse.js
-import { LEAF_PARSERS, parseQuestionForm } from "./blocks.js";
+import { LEAF_PARSERS, parseQuestionForm, parseTask } from "./blocks.js";
 
 const FENCE_RE = /^```(\S+)?[ \t]*(.*)$/;   // ```type attrs
 const DIR_OPEN_RE = /^:::(\S+)[ \t]*(.*)$/; // :::type attrs
@@ -124,6 +124,7 @@ function blockFromSegment(seg, id) {
   // directive container
   if (seg.type === "callout") return { type: "callout", id, tone: seg.attrs.tone || "info", md: seg.inner };
   if (seg.type === "question-form") return parseQuestionForm(seg.attrs, seg.inner, id);
+  if (seg.type === "task") return parseTask(seg.attrs, seg.inner, id);
   if (seg.type === "tabs" || seg.type === "columns") {
     const childSegs = tokenize(seg.inner).filter((s) => s.kind === "fence" || s.kind === "dir");
     const children = childSegs.map((cs, j) => {

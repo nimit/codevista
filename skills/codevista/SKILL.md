@@ -22,8 +22,16 @@ chat — the deliverable is the rendered local file plus its
 
 ## Pick the mode, then follow that file
 
+- **Brainstorm** — the task isn't clear enough to plan yet: read
+  `references/brainstorm.md` and follow it to reach a confident understanding,
+  then continue to the plan. Skip this when the task is already clear.
 - **Visual plan** — authoring/reviewing an implementation plan *before* code is
   written: read `references/plan.md` and follow it.
+- **Execute** — implementing an *approved* plan autonomously: read
+  `references/execute.md` and follow it. It runs each `:::task` (derive → implement
+  → verify → self-review → status → integrate), writes status back so the served
+  viewer is a live dashboard, and closes with a recap. Use this when a plan with
+  approved `:::task` blocks already exists.
 - **Visual recap** — summarizing a branch/commit/PR diff *after* work is done:
   read `references/recap.md` and follow it.
 

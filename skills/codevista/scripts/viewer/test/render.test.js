@@ -53,6 +53,25 @@ test("question-form renders option buttons and shows a saved write-in as a selec
   assert.doesNotMatch(html, /value="ship behind a flag"/);
 });
 
+test("task renders a status badge, title, and outcome/verify/deps rows", () => {
+  const { blocks } = parse([
+    ":::task id=t1 status=running risk=high",
+    "title: Auth middleware",
+    "outcome: 401 on missing session",
+    "verify: npm test auth",
+    "depends-on: session-store",
+    ":::",
+  ].join("\n"));
+  const html = render(blocks, { md });
+  assert.match(html, /data-type="task"/);
+  assert.match(html, /task-badge"[^>]*data-status="running"[^>]*>running/);
+  assert.match(html, /task-title[^>]*>Auth middleware/);
+  assert.match(html, /task-key">outcome<\/span><span class="task-val">401 on missing session/);
+  assert.match(html, /task-key">verify<\/span><span class="task-val">npm test auth/);
+  assert.match(html, /task-risk/);
+  assert.match(html, /<code>session-store<\/code>/);
+});
+
 test("columns marks wide and includes column labels", () => {
   const { blocks } = parse(
     ":::columns\n```wireframe surface=desktop label=\"Before\"\n<div>a</div>\n```\n```wireframe surface=desktop label=\"After\"\n<div>b</div>\n```\n:::"

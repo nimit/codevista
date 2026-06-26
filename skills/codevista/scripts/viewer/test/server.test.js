@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import net from "node:net";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createServer, resolveCommentsPath, applyAnswer } from "../bin/server.js";
+import { createServer, resolveCommentsPath, applyAnswer, applyStatus } from "../bin/server.js";
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "server.js");
 
@@ -140,4 +140,69 @@ test("no source arg prints usage to stderr and exits 1", () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /Usage: server\.js/);
   assert.equal(r.stdout, "");
+});
+
+test("applyStatus rewrites the status attr on the matching :::task line", () => {
+  const src = [
+    "# Plan", "",
+    ":::task id=auth-mw status=pending risk=high",
+    "title: Auth middleware",
+    "outcome: 401 on missing session",
+    "verify: npm test auth",
+    ":::",
+  ].join("\n");
+  const out = applyStatus(src, { taskId: "auth-mw", status: "running" });
+  assert.match(out, /:::task id=auth-mw status=running risk=high/);
+  assert.doesNotMatch(out, /status=pending/);
+  // body lines are untouched
+  assert.match(out, /title: Auth middleware/);
+  assert.match(out, /verify: npm test auth/);
+});
+
+test("applyStatus appends status= when the task line has none", () => {
+  const src = [":::task id=t2", "title: T", "outcome: O", "verify: V", ":::"].join("\n");
+  const out = applyStatus(src, { taskId: "t2", status: "done" });
+  assert.match(out, /:::task id=t2 status=done/);
+});
+
+test("applyStatus only touches the targeted task among several", () => {
+  const src = [
+    ":::task id=a status=pending", "title: A", "outcome: O", "verify: V", ":::",
+    ":::task id=b status=pending", "title: B", "outcome: O", "verify: V", ":::",
+  ].join("\n");
+  const out = applyStatus(src, { taskId: "b", status: "running" });
+  assert.match(out, /:::task id=a status=pending/);
+  assert.match(out, /:::task id=b status=running/);
+});
+
+test("applyStatus returns source unchanged for an unknown or non-task id", () => {
+  const src = [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n");
+  assert.equal(applyStatus(src, { taskId: "nope", status: "done" }), src);
+});
+
+test("--set-status rewrites a task's status in the file and exits 0", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n"));
+  const r = spawnSync(process.execPath, [SERVER, src, "--set-status", "t1=running"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(readFileSync(src, "utf8"), /:::task id=t1 status=running/);
+});
+
+test("--set-status rejects an invalid status and exits 1", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n"));
+  const r = spawnSync(process.execPath, [SERVER, src, "--set-status", "t1=bogus"], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /pending\|running\|done\|blocked/);
+  assert.match(readFileSync(src, "utf8"), /status=pending/);  // unchanged
+});
+
+test("comments.json is isolated per plan directory", () => {
+  const a = resolveCommentsPath("/proj/plans/alpha/alpha.plan.md");
+  const b = resolveCommentsPath("/proj/plans/beta/beta.plan.md");
+  assert.notEqual(a, b);
+  assert.match(a, /\/plans\/alpha\/comments\.json$/);
+  assert.match(b, /\/plans\/beta\/comments\.json$/);
 });

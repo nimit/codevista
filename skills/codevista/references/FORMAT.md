@@ -81,6 +81,24 @@ types and their bodies:
   actual choice (one for `single`, several for `multi`). A write-in is stored as
   `answer="…"` on the `q` line. The viewer writes `selected` / `answer` back into
   the file via `POST /answers` when a reviewer answers in the served page.
+- **`:::task`** — `id=<id> status=pending|running|done|blocked risk=normal|high`.
+  A unit of implementation work, written as human-readable intent (never
+  pre-baked code). Body is one `key: value` per line:
+  ```
+  title: <one-line summary of the task>          (required)
+  outcome: <what "done" looks like, in prose>    (required)
+  verify: <how to check it — command and/or manual step>   (required)
+  scope: <files/area to work in>                 (optional)
+  depends-on: <task-id, task-id>                 (optional, comma/space list)
+  constraints: <decisions the implementer must honor>      (optional)
+  notes: <gotchas>                               (optional)
+  ```
+  `status` defaults to `pending` and renders as a live badge. During execution the
+  status is advanced (`pending → running → done`/`blocked`) by rewriting the
+  `status=` attribute on the `:::task` line —
+  `node scripts/viewer/bin/server.js <plan> --set-status <id>=<status>` — which the
+  server's `fs.watch`+SSE turn into a live dashboard update (the same write-back
+  rail as `selected`/`answer`).
 
 ## 3. Frontmatter
 
@@ -118,6 +136,8 @@ has a stable `id` (explicit `id=` attr, else `b<index>`). Node shapes:
 { type:'tabs',      id, tabs:[{label, blocks:Node[]}] }
 { type:'columns',   id, wide:boolean, columns:[{label, blocks:Node[]}] }
 { type:'question-form', id, title, questions:[{kind, text, answer, options:[{label,detail,recommended,selected}]}] }
+{ type:'task', id, status:'pending'|'running'|'done'|'blocked', risk:'normal'|'high',
+                    title, outcome, verify, scope, dependsOn:[ids], constraints, notes }
 ```
 
 ## Worked example
