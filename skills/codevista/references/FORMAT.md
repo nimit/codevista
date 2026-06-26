@@ -73,10 +73,14 @@ types and their bodies:
   `callout` when you want nested blocks).
 - **`:::question-form` title="Open Questions"** — body grammar:
   ```
-  q single|multi|freeform "Question text?"
-    - "Option A" recommended detail="…"
+  q single|multi|freeform "Question text?" answer="free-text write-in"?
+    - "Option A" recommended selected detail="…"
     - "Option B" detail="…"
   ```
+  `recommended` marks the suggested default; `selected` marks the reviewer's
+  actual choice (one for `single`, several for `multi`). A write-in is stored as
+  `answer="…"` on the `q` line. The viewer writes `selected` / `answer` back into
+  the file via `POST /answers` when a reviewer answers in the served page.
 
 ## 3. Frontmatter
 
@@ -113,7 +117,7 @@ has a stable `id` (explicit `id=` attr, else `b<index>`). Node shapes:
 { type:'annotated-code', id, file, lang, code, annotations:[{lines, note}] }
 { type:'tabs',      id, tabs:[{label, blocks:Node[]}] }
 { type:'columns',   id, wide:boolean, columns:[{label, blocks:Node[]}] }
-{ type:'question-form', id, title, questions:[{kind, text, options:[{label,detail,recommended}]}] }
+{ type:'question-form', id, title, questions:[{kind, text, answer, options:[{label,detail,recommended,selected}]}] }
 ```
 
 ## Worked example

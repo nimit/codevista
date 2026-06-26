@@ -47,7 +47,7 @@ export function renderBlock(node, opts) {
     case "columns":
       return renderColumns(node, opts);
     case "question-form":
-      return renderQuestionForm(node, md);
+      return renderQuestionForm(node);
     default:
       return `<pre>${escapeHtml(JSON.stringify(node))}</pre>`;
   }
@@ -184,14 +184,19 @@ function renderColumns(node, opts) {
   return `<div class="columns${node.wide ? " is-wide" : ""}">${cols}</div>`;
 }
 
-function renderQuestionForm(node, md) {
-  const qs = node.questions.map((q) => {
-    const opts = q.options.map((o) =>
-      `<li class="${o.recommended ? "recommended" : ""}"><b>${escapeHtml(o.label)}</b>${
+function renderQuestionForm(node) {
+  const qs = node.questions.map((q, qi) => {
+    const opts = q.kind === "freeform" ? "" : q.options.map((o, oi) =>
+      `<button type="button" class="qf-opt${o.selected ? " qf-selected" : ""}${o.recommended ? " recommended" : ""}" data-q="${qi}" data-opt="${oi}" aria-pressed="${o.selected ? "true" : "false"}"><b>${escapeHtml(o.label)}</b>${
         o.recommended ? ' <span class="dm-flag">recommended</span>' : ""
-      }${o.detail ? `<div class="wf-muted">${escapeHtml(o.detail)}</div>` : ""}</li>`).join("");
-    return `<div class="qf-q"><div class="qf-text">${escapeHtml(q.text)}</div>
-      <ul class="qf-options">${opts}</ul></div>`;
+      }${o.detail ? `<span class="wf-muted">${escapeHtml(o.detail)}</span>` : ""}</button>`).join("");
+    // A saved write-in is shown as a selected option card (with a remove control),
+    // not as text in the input — the input stays a staging field for adding one.
+    const customOpt = q.answer
+      ? `<div class="qf-opt qf-selected qf-custom-opt"><b>${escapeHtml(q.answer)}</b><button type="button" class="qf-remove" aria-label="Remove custom answer" title="Remove">×</button></div>`
+      : "";
+    const writein = `<div class="qf-writein"><input type="text" class="qf-custom" data-q="${qi}" placeholder="Write a custom answer…" value=""><button type="button" class="qf-save">Add</button></div>`;
+    return `<div class="qf-q" data-q="${qi}" data-kind="${escapeHtml(q.kind)}"><div class="qf-text">${escapeHtml(q.text)}</div><div class="qf-options">${opts}${customOpt}</div>${writein}</div>`;
   }).join("");
   return `<div class="question-form wf-card"><div class="qf-title">${escapeHtml(node.title)}</div>${qs}</div>`;
 }

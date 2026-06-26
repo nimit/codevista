@@ -22,8 +22,11 @@ export function tokenize(source) {
   const lines = source.split(/\r?\n/);
   const segs = [];
   let md = [];
+  let mdStart = 0;
+  const lastLine = Math.max(0, lines.length - 1);
   const flushMd = () => {
-    if (md.join("\n").trim()) segs.push({ kind: "md", text: md.join("\n") });
+    if (md.join("\n").trim())
+      segs.push({ kind: "md", text: md.join("\n"), startLine: mdStart, endLine: mdStart + md.length - 1 });
     md = [];
   };
   for (let i = 0; i < lines.length; i++) {
@@ -31,6 +34,7 @@ export function tokenize(source) {
     const dirOpen = line.match(DIR_OPEN_RE);
     if (dirOpen && dirOpen[1] !== "") {
       flushMd();
+      const start = i;
       const type = dirOpen[1];
       const attrs = parseAttrs(dirOpen[2]);
       const inner = [];
@@ -44,12 +48,14 @@ export function tokenize(source) {
         }
         inner.push(lines[i]);
       }
-      segs.push({ kind: "dir", type, attrs, inner: inner.join("\n") });
+      segs.push({ kind: "dir", type, attrs, inner: inner.join("\n"),
+        startLine: start, endLine: Math.min(i, lastLine) });
       continue;
     }
     if (line.startsWith("```")) {
       const fm = line.match(FENCE_RE);
       flushMd();
+      const start = i;
       const type = fm[1] || "";
       const attrs = parseAttrs(fm[2]);
       const body = [];
@@ -60,13 +66,31 @@ export function tokenize(source) {
       }
       // Plain code fences (no recognized type) stay as markdown code (resolved
       // later in parse(): unknown types fall back to a fenced richtext block).
-      segs.push({ kind: "fence", type, attrs, body: body.join("\n") });
+      segs.push({ kind: "fence", type, attrs, body: body.join("\n"),
+        startLine: start, endLine: Math.min(i, lastLine) });
       continue;
     }
+    if (md.length === 0) mdStart = i;
     md.push(line);
   }
   flushMd();
   return segs;
+}
+
+// Map a block id (the section's data-block-id) back to its absolute line span in
+// `source`. Reuses the real tokenize()/id logic so spans always line up with what
+// parse() produced; accounts for the frontmatter line offset. Returns null if no
+// block matches. Used by the server to rewrite a single answered question line.
+export function locate(source, blockId) {
+  const { body } = splitFrontmatter(source);
+  const offset = source.split(/\r?\n/).length - body.split(/\r?\n/).length;
+  const segs = tokenize(body);
+  for (let i = 0; i < segs.length; i++) {
+    const id = (segs[i].attrs && segs[i].attrs.id) || `b${i}`;
+    if (id === blockId)
+      return { type: segs[i].type, startLine: segs[i].startLine + offset, endLine: segs[i].endLine + offset };
+  }
+  return null;
 }
 
 export function splitFrontmatter(source) {

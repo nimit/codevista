@@ -126,7 +126,12 @@ Use `single` or `multi` for clear choices, `freeform` for constraints,
 `recommended: true` for the default you would pick, and option `wireframe` /
 `diagram` previews only when the options are not already visible in the top
 wireframe(s). `single` and `multi` questions always render a write-in field so a
-reviewer can answer with a custom option.
+reviewer can answer with a custom option. Once a reviewer answers in the served
+viewer, the choice is written back into the file as `selected` (or `answer="…"`);
+on your next pass, read those markers, keep the question in place with the choice
+highlighted, and treat it as the decision — do not delete or rewrite the
+question, and store any write-in additively as `answer="…"` without changing the
+authored options.
 Keep non-answerable assumptions or risks as concise `callout` blocks in
 the relevant section. Never bury a questions/decisions wall inside the plan
 narrative, and never ask the same question twice.

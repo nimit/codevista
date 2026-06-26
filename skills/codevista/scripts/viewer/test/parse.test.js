@@ -1,8 +1,8 @@
 // test/parse.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tokenize, parseAttrs } from "../src/parse.js";
-import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel } from "../src/blocks.js";
+import { tokenize, parseAttrs, locate } from "../src/parse.js";
+import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
 test("parseAttrs handles bare flags, key=value, and quoted values", () => {
@@ -117,6 +117,44 @@ test("parse builds full AST with containers and stable ids", () => {
   assert.equal(blocks[1].columns[0].blocks[0].type, "wireframe");
   assert.ok(blocks[1].id); // stable id present
   assert.equal(blocks[1].wide, false); // mobile is narrow
+});
+
+test("parseQuestionForm reads selected flags and the answer write-in", () => {
+  const node = parseQuestionForm({ title: "Open Questions" }, [
+    'q single "Lifetime?" answer="custom value"',
+    '  - "30 days" recommended selected detail="d"',
+    '  - "7 days" detail="e"',
+    'q multi "Which?"',
+    '  - "A" selected',
+    '  - "B" selected',
+    '  - "C"',
+  ].join("\n"), "qf1");
+  assert.equal(node.questions[0].answer, "custom value");
+  assert.equal(node.questions[0].options[0].selected, true);
+  assert.equal(node.questions[0].options[0].recommended, true);
+  assert.equal(node.questions[0].options[1].selected, false);
+  assert.deepEqual(node.questions[1].options.map((o) => o.selected), [true, true, false]);
+});
+
+test("locate maps a block id to its absolute source line span", () => {
+  const src = [
+    "---", "title: T", "kind: plan", "---", // lines 0-3
+    "Intro prose.",                          // 4
+    "",                                      // 5
+    ':::question-form title="Open Questions"', // 6
+    'q single "Q?"',                         // 7
+    '  - "A"',                                // 8
+    ":::",                                    // 9
+  ].join("\n");
+  const loc = locate(src, "b1");
+  assert.equal(loc.type, "question-form");
+  assert.equal(loc.startLine, 6);
+  assert.equal(loc.endLine, 9);
+  assert.equal(locate(src, "nope"), null);
+  // no-frontmatter case keeps lines absolute (offset 0)
+  const loc0 = locate(':::question-form\nq single "Q?"\n:::', "b0");
+  assert.equal(loc0.startLine, 0);
+  assert.equal(loc0.endLine, 2);
 });
 
 test("columns with desktop surface marks wide=true", () => {

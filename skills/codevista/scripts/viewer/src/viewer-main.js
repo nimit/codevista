@@ -2,6 +2,7 @@
 import { parse } from "/src/parse.js";
 import { render } from "/src/render.js";
 import { mountComments } from "/src/comments-client.js";
+import { mountAnswers } from "/src/answers-client.js";
 import { marked } from "/vendor/marked.esm.js";
 import DOMPurify from "/vendor/purify.es.mjs";
 
@@ -41,6 +42,7 @@ async function load(flash) {
   }
   wireTabs();
   await mountComments(doc);
+  mountAnswers(doc);
 }
 
 function wireTabs() {
@@ -63,4 +65,9 @@ load(false);
 
 // live reload via SSE
 const es = new EventSource("/events");
-es.addEventListener("reload", () => load(true));
+es.addEventListener("reload", () => {
+  // Our own answer writes trigger a reload; skip exactly one so the optimistic
+  // highlight doesn't flicker. External edits (the agent) still live-reload.
+  if (window.__lvSkipReload) { window.__lvSkipReload = false; return; }
+  load(true);
+});

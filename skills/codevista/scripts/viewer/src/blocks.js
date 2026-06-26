@@ -128,14 +128,22 @@ export function parseQuestionForm(attrs, body, id) {
   const questions = [];
   let cur = null;
   for (const raw of body.split(/\r?\n/)) {
-    const q = raw.match(/^q\s+(single|multi|freeform)\s+"([^"]+)"/);
-    if (q) { cur = { kind: q[1], text: q[2], options: [] }; questions.push(cur); continue; }
+    const q = raw.match(/^q\s+(single|multi|freeform)\s+"([^"]+)"(.*)$/);
+    if (q) {
+      const am = q[3].match(/answer="([^"]*)"/);
+      cur = { kind: q[1], text: q[2], answer: am ? am[1] : "", options: [] };
+      questions.push(cur);
+      continue;
+    }
     const opt = raw.match(/^\s*-\s*"([^"]+)"(.*)$/);
     if (opt && cur) {
       const tail = opt[2];
-      const recommended = /\brecommended\b/.test(tail);
       const dm = tail.match(/detail="([^"]*)"/);
-      cur.options.push({ label: opt[1], detail: dm ? dm[1] : "", recommended });
+      cur.options.push({
+        label: opt[1], detail: dm ? dm[1] : "",
+        recommended: /\brecommended\b/.test(tail),
+        selected: /\bselected\b/.test(tail),
+      });
     }
   }
   return { type: "question-form", id, title: attrs.title || "Open Questions", questions };

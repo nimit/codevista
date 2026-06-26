@@ -127,9 +127,26 @@ body {
 .callout.tone-ok{ border-left-color:var(--wf-ok); }
 .question-form .qf-title{ font-weight:700; font-size:16px; margin-bottom:8px; }
 .qf-q{ margin:10px 0; } .qf-text{ font-weight:600; }
-.qf-options{ list-style:none; padding:0; margin:6px 0; display:flex; flex-direction:column; gap:6px; }
-.qf-options li{ border:1.4px solid var(--wf-line); border-radius:8px; padding:8px 10px; }
-.qf-options li.recommended{ border-color:var(--wf-accent); background:var(--wf-accent-soft); }
+.qf-options{ margin:6px 0; display:flex; flex-direction:column; gap:6px; }
+.qf-opt{ display:block; width:100%; text-align:left; font:inherit; color:inherit;
+  cursor:pointer; border:1.4px solid var(--wf-line); border-radius:8px; padding:8px 10px;
+  background:var(--wf-card); transition:border-color .12s, background .12s; }
+.qf-opt:hover{ border-color:var(--wf-accent); }
+.qf-opt.qf-selected{ border-color:var(--wf-accent); background:var(--wf-accent-soft); }
+.qf-opt .wf-muted{ display:block; margin-top:2px; }
+.qf-custom-opt{ display:flex; align-items:center; gap:8px; cursor:default; }
+.qf-custom-opt b{ flex:1; min-width:0; word-break:break-word; }
+.qf-remove{ flex:none; font:inherit; line-height:1; cursor:pointer; color:var(--wf-muted);
+  background:none; border:none; padding:2px 6px; border-radius:6px; }
+.qf-remove:hover{ color:var(--wf-warn); }
+.qf-writein{ display:flex; gap:8px; margin-top:8px; }
+.qf-writein .qf-custom{ flex:1; font:inherit; color:inherit; background:var(--wf-card);
+  border:1.4px solid var(--wf-line); border-radius:8px; padding:6px 10px; }
+.qf-writein .qf-custom::placeholder{ color:var(--wf-muted); }
+.qf-writein .qf-custom:focus{ outline:none; border-color:var(--wf-accent); }
+.qf-writein .qf-save{ font:inherit; cursor:pointer; border-radius:8px; padding:6px 14px;
+  border:1.4px solid var(--wf-line); background:var(--wf-card); color:inherit; }
+.qf-writein .qf-save:hover{ border-color:var(--wf-accent); color:var(--wf-accent); }
 
 /* ---- tabs / columns ---- */
 .tab-bar{ display:flex; gap:4px; border-bottom:1.4px solid var(--wf-line); overflow-x:auto; }

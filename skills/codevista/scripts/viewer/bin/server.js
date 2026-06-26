@@ -5,7 +5,7 @@ import { readFile, readFileSync, writeFileSync, existsSync, watch } from "node:f
 import { join, dirname, resolve, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { parse } from "../src/parse.js";
+import { parse, locate } from "../src/parse.js";
 import { render } from "../src/render.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +26,45 @@ function readComments(srcPath) {
 }
 function writeComments(srcPath, list) {
   writeFileSync(resolveCommentsPath(srcPath), JSON.stringify(list, null, 2));
+}
+
+// Set or remove a key="value" attr on a single line (empty value removes it).
+function setAttr(line, key, value) {
+  const stripped = line.replace(new RegExp(`\\s*${key}="[^"]*"`), "");
+  return value ? `${stripped} ${key}="${value}"` : stripped;
+}
+// Add or remove a bare word flag (e.g. `selected`) on a single line.
+function toggleFlag(line, flag, on) {
+  const stripped = line.replace(new RegExp(`\\s*\\b${flag}\\b`), "");
+  return on ? `${stripped} ${flag}` : stripped;
+}
+
+// Record a reviewer's answer by rewriting ONLY the matched question/option lines
+// of `source` in place: `selected` (option indices) drives the `selected` flags
+// and `custom` sets answer="…". Faithful persistence — the client (which knows
+// single vs multi) decides how options and a write-in combine, so the server
+// just writes what it is told. Pure + exported so it is unit-testable.
+export function applyAnswer(source, { blockId, questionIndex, kind, selected = [], custom = "" }) {
+  const loc = locate(source, blockId);
+  if (!loc || loc.type !== "question-form") return source;
+  const lines = source.split(/\r?\n/);
+  const qLines = [];
+  for (let i = loc.startLine; i <= loc.endLine; i++)
+    if (/^q\s+(single|multi|freeform)\b/.test(lines[i])) qLines.push(i);
+  const qStart = qLines[questionIndex];
+  if (qStart == null) return source;
+  const qEnd = qLines[questionIndex + 1] ?? (loc.endLine + 1);
+
+  const clean = String(custom).replace(/[\r\n]+/g, " ").replace(/"/g, "'").trim();
+  lines[qStart] = setAttr(lines[qStart], "answer", clean);
+
+  let optIdx = 0;
+  for (let i = qStart + 1; i < qEnd; i++) {
+    if (!/^\s*-\s*"/.test(lines[i])) continue;
+    lines[i] = toggleFlag(lines[i], "selected", selected.includes(optIdx));
+    optIdx++;
+  }
+  return lines.join("\n");
 }
 
 function send(res, status, body, type = "text/plain") {
@@ -92,6 +131,20 @@ export function createServer({ srcPath, kind }) {
       });
       return;
     }
+    if (url === "/answers" && req.method === "POST") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        let a; try { a = JSON.parse(raw); } catch { return send(res, 400, "bad json"); }
+        try {
+          // rewrite the answered line in place — fs.watch turns this into an SSE
+          // reload (the originating tab suppresses that one; see answers-client.js).
+          writeFileSync(srcPath, applyAnswer(readFileSync(srcPath, "utf8"), a));
+          send(res, 200, JSON.stringify({ ok: true }), "application/json");
+        } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
+      });
+      return;
+    }
     if (url === "/events") {
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-store", connection: "keep-alive" });
       res.write("event: hello\ndata: 1\n\n");
@@ -121,7 +174,14 @@ function openBrowser(url) {
   const cmd = process.platform === "darwin" ? "open"
     : process.platform === "win32" ? "cmd" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
-  try { spawn(cmd, args, { stdio: "ignore", detached: true }).unref(); } catch { /* ignore */ }
+  try {
+    const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+    // spawn reports a missing opener (e.g. headless/WSL with no xdg-open) via an
+    // async 'error' event, not a throw; without this listener it would crash the
+    // server. Swallow it and point the user at the URL that's already printed.
+    child.on("error", () => console.log(`Couldn't auto-open a browser — open ${url} manually.`));
+    child.unref();
+  } catch { /* ignore */ }
 }
 
 // Single self-contained HTML file (CSS + rendered content inlined), for
