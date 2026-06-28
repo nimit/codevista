@@ -94,6 +94,7 @@ export function locate(source, blockId) {
 }
 
 export function splitFrontmatter(source) {
+  if (typeof source !== "string") source = "";   // total on a missing/unreadable source
   const m = source.match(/^---\n([\s\S]*?)\n---\n?/);
   const meta = { title: "", kind: "" };
   let body = source;

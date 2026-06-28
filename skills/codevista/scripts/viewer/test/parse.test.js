@@ -1,7 +1,7 @@
 // test/parse.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tokenize, parseAttrs, locate } from "../src/parse.js";
+import { tokenize, parseAttrs, locate, splitFrontmatter } from "../src/parse.js";
 import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm, parseTask } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
@@ -218,4 +218,18 @@ test("parse wires :::task directives into task nodes with stable ids", () => {
   assert.equal(blocks[0].id, "auth-mw");
   assert.equal(blocks[0].status, "pending");
   assert.equal(blocks[0].title, "Auth middleware");
+});
+
+// Regression: when /content can't read the source file it returns an error
+// object with no `source`, so the browser would call parse(undefined). parse()
+// must stay total (never throw) on a non-string source so a transient unreadable
+// file degrades to an empty doc instead of crashing the whole page.
+test("parse and splitFrontmatter are total on a non-string source", () => {
+  for (const bad of [undefined, null, 0, {}]) {
+    assert.doesNotThrow(() => splitFrontmatter(bad), `splitFrontmatter(${bad})`);
+    assert.doesNotThrow(() => parse(bad), `parse(${bad})`);
+  }
+  const { meta, blocks } = parse(undefined);
+  assert.equal(meta.kind, "plan");
+  assert.deepEqual(blocks, []);
 });

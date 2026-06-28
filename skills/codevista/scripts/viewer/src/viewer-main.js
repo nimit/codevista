@@ -28,7 +28,21 @@ function applyTheme(t) {
 }
 
 async function load(flash) {
-  const { source } = await (await fetch("/content")).json();
+  // /content yields { source } on success, or an error object ({ error }) with no
+  // `source` when the file is momentarily unreadable — e.g. a live-reload racing a
+  // rewrite, or the file not finished being written on first open. Don't feed that
+  // into parse() (parse(undefined) used to crash the whole page); keep whatever is
+  // already shown and retry shortly so the view self-heals once the file is back.
+  let data = {};
+  try { data = await (await fetch("/content")).json(); } catch { /* network blip */ }
+  if (typeof data.source !== "string") {
+    if (!doc.dataset.loaded) doc.innerHTML = '<p class="load-note">Waiting for source…</p>';
+    clearTimeout(load._retry);
+    load._retry = setTimeout(() => load(flash), 500);
+    return;
+  }
+  doc.dataset.loaded = "1";
+  const { source } = data;
   const { meta, blocks } = parse(source);
   document.getElementById("title").textContent = meta.title || "Visual plan";
   document.title = meta.title || "Visual plan";

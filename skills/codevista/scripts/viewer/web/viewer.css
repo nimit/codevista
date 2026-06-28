@@ -18,6 +18,7 @@ body {
   font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 }
 .doc { max-width:var(--doc-max); margin:0 auto; padding:40px 24px 160px; }
+.load-note{ color:var(--wf-muted); font-style:italic; }
 .doc h1{ font-size:30px; margin:0 0 8px; } .doc h2{ font-size:22px; margin:32px 0 8px; }
 .doc h3{ font-size:17px; margin:24px 0 6px; }
 .doc a{ color:var(--wf-accent); }
