@@ -1,7 +1,7 @@
 // test/parse.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tokenize, parseAttrs, locate, splitFrontmatter } from "../src/parse.js";
+import { tokenize, parseAttrs, locate, splitFrontmatter, duplicateIds } from "../src/parse.js";
 import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm, parseTask } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
@@ -155,6 +155,19 @@ test("locate maps a block id to its absolute source line span", () => {
   const loc0 = locate(':::question-form\nq single "Q?"\n:::', "b0");
   assert.equal(loc0.startLine, 0);
   assert.equal(loc0.endLine, 2);
+});
+
+test("duplicateIds reports effective ids shared by more than one block", () => {
+  const src = [
+    "```annotated-code file=e.js lang=js id=dup", "x", "```",
+    "",
+    ":::task id=dup status=pending", "title: T", "outcome: O", "verify: V", ":::",
+    "",
+    ":::task id=solo status=pending", "title: S", "outcome: O", "verify: V", ":::",
+  ].join("\n");
+  assert.deepEqual(duplicateIds(src), ["dup"]);
+  // unique explicit ids and the positional b<index> fallback never collide
+  assert.deepEqual(duplicateIds("# just markdown\n\nmore prose"), []);
 });
 
 test("columns with desktop surface marks wide=true", () => {

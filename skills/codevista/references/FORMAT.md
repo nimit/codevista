@@ -10,6 +10,20 @@ GitHub-flavored Markdown (headings, lists, **bold**, `code`, tables, checklists,
 links) and renders as a `richtext` block. Structured/visual blocks are expressed
 two ways.
 
+## Block ids
+
+Most blocks take an `id=<id>` attribute. That id is the anchor comments attach to
+and the handle `--set-status` and answer write-backs target. **Ids must be unique
+within a document.** Use a **random 8-character alphanumeric id** (e.g.
+`id=x7k2p9qa`) — not a semantic name. Semantic names invite collisions (two blocks
+about the same thing, say an `annotated-code` block and its `:::task`, both getting
+`id=driver-engine`), and because id lookup resolves to the *first* match, a
+collision silently misroutes id-addressed writes. A block with no `id=` gets a
+positional fallback (`b<index>`) — fine for throwaway prose, but give an explicit
+random id to anything referenced by a comment, a `depends-on`, or `--set-status`.
+Duplicate ids are reported, not tolerated: the server warns on startup and
+`--set-status` refuses (exits non-zero) rather than editing the wrong block.
+
 ## 1. Leaf blocks — fenced code blocks with an info string
 
 A fence is ` ```<type> key=value key="quoted value" ` … ` ``` `. The info
@@ -117,7 +131,8 @@ heading, kind from file extension).
 ## AST node shapes (the testable contract)
 
 `parse(source)` returns `{ meta: {title, kind}, blocks: Node[] }`. Every `Node`
-has a stable `id` (explicit `id=` attr, else `b<index>`). Node shapes:
+has a stable `id` (explicit `id=` attr, else `b<index>`), unique per document (see
+[Block ids](#block-ids)). Node shapes:
 
 ```js
 { type:'richtext',  id, md:string }

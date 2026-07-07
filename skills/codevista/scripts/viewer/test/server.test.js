@@ -175,9 +175,26 @@ test("applyStatus only touches the targeted task among several", () => {
   assert.match(out, /:::task id=b status=running/);
 });
 
-test("applyStatus returns source unchanged for an unknown or non-task id", () => {
+test("applyStatus returns null for an unknown or non-task id", () => {
   const src = [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n");
-  assert.equal(applyStatus(src, { taskId: "nope", status: "done" }), src);
+  assert.equal(applyStatus(src, { taskId: "nope", status: "done" }), null);
+});
+
+test("applyStatus returns null when an earlier non-task block shadows the task id", () => {
+  const src = [
+    "```annotated-code file=e.js lang=js id=dup", "code", "```",
+    "",
+    ":::task id=dup status=pending", "title: T", "outcome: O", "verify: V", ":::",
+  ].join("\n");
+  // locate() resolves id=dup to the annotated-code block (first match), so a
+  // faithful applyStatus refuses rather than silently editing the wrong block.
+  assert.equal(applyStatus(src, { taskId: "dup", status: "done" }), null);
+});
+
+test("applyAnswer returns null when the id is not a question-form", () => {
+  const src = [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n");
+  assert.equal(applyAnswer(src, { blockId: "t1", questionIndex: 0, kind: "single", selected: [0] }), null);
+  assert.equal(applyAnswer(src, { blockId: "nope", questionIndex: 0, kind: "single", selected: [0] }), null);
 });
 
 test("--set-status rewrites a task's status in the file and exits 0", () => {
@@ -196,6 +213,31 @@ test("--set-status rejects an invalid status and exits 1", () => {
   const r = spawnSync(process.execPath, [SERVER, src, "--set-status", "t1=bogus"], { encoding: "utf8" });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /pending\|running\|done\|blocked/);
+  assert.match(readFileSync(src, "utf8"), /status=pending/);  // unchanged
+});
+
+test("--set-status fails loudly on a duplicated id and leaves the file unchanged", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  // The original bug: an annotated-code block and a :::task share id=dup.
+  writeFileSync(src, [
+    "```annotated-code file=e.js lang=js id=dup", "code", "```",
+    "",
+    ":::task id=dup status=pending", "title: T", "outcome: O", "verify: V", ":::",
+  ].join("\n"));
+  const r = spawnSync(process.execPath, [SERVER, src, "--set-status", "dup=done"], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /not unique/i);
+  assert.match(readFileSync(src, "utf8"), /status=pending/);  // unchanged, no false success
+});
+
+test("--set-status fails loudly when no :::task has the id", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n"));
+  const r = spawnSync(process.execPath, [SERVER, src, "--set-status", "ghost=done"], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /no :::task/i);
   assert.match(readFileSync(src, "utf8"), /status=pending/);  // unchanged
 });
 

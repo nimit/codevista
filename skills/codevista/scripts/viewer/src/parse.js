@@ -93,6 +93,23 @@ export function locate(source, blockId) {
   return null;
 }
 
+// Effective block ids (explicit `id=` attr, else positional `b<index>`) that are
+// shared by more than one top-level block. Duplicate ids make id-addressed writes
+// ambiguous — locate() always resolves to the FIRST match — so the CLI hard-errors
+// and the server warns when any exist. Pure; mirrors the exact id logic used by
+// parse()/locate() so the three always agree. (Positional ids can't collide with
+// each other; only reused explicit `id=` values do.)
+export function duplicateIds(source) {
+  const { body } = splitFrontmatter(source);
+  const segs = tokenize(body);
+  const counts = new Map();
+  segs.forEach((seg, i) => {
+    const id = (seg.attrs && seg.attrs.id) || `b${i}`;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  });
+  return [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+}
+
 export function splitFrontmatter(source) {
   if (typeof source !== "string") source = "";   // total on a missing/unreadable source
   const m = source.match(/^---\n([\s\S]*?)\n---\n?/);

@@ -5,7 +5,7 @@ import { readFile, readFileSync, writeFileSync, existsSync, watch } from "node:f
 import { join, dirname, resolve, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { parse, locate } from "../src/parse.js";
+import { parse, locate, duplicateIds } from "../src/parse.js";
 import { render } from "../src/render.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,10 +43,12 @@ function toggleFlag(line, flag, on) {
 // of `source` in place: `selected` (option indices) drives the `selected` flags
 // and `custom` sets answer="…". Faithful persistence — the client (which knows
 // single vs multi) decides how options and a write-in combine, so the server
-// just writes what it is told. Pure + exported so it is unit-testable.
+// just writes what it is told. Pure + exported so it is unit-testable. Returns
+// null when blockId does not resolve to a question-form block, so the caller can
+// surface an error instead of silently writing nothing.
 export function applyAnswer(source, { blockId, questionIndex, kind, selected = [], custom = "" }) {
   const loc = locate(source, blockId);
-  if (!loc || loc.type !== "question-form") return source;
+  if (!loc || loc.type !== "question-form") return null;
   const lines = source.split(/\r?\n/);
   const qLines = [];
   for (let i = loc.startLine; i <= loc.endLine; i++)
@@ -70,11 +72,12 @@ export function applyAnswer(source, { blockId, questionIndex, kind, selected = [
 // Advance a :::task's status by rewriting the `status=` token on its opening
 // directive line (located by id via locate()). Pure + exported so it is
 // unit-testable; the CLI (--set-status) validates the allowed status set, so this
-// stays faithful and writes whatever it is told. Returns source unchanged when the
-// id is not a :::task block.
+// stays faithful and writes whatever it is told. Returns null when the id does not
+// resolve to a :::task block (unknown id, or an earlier block shares it) — the
+// caller turns that into a visible error instead of a silent no-op / false success.
 export function applyStatus(source, { taskId, status }) {
   const loc = locate(source, taskId);
-  if (!loc || loc.type !== "task") return source;
+  if (!loc || loc.type !== "task") return null;
   const lines = source.split(/\r?\n/);
   const line = lines[loc.startLine];
   const re = /\bstatus=("[^"]*"|'[^']*'|\S+)/;
@@ -156,7 +159,10 @@ export function createServer({ srcPath, kind }) {
         try {
           // rewrite the answered line in place — fs.watch turns this into an SSE
           // reload (the originating tab suppresses that one; see answers-client.js).
-          writeFileSync(srcPath, applyAnswer(readFileSync(srcPath, "utf8"), a));
+          const updated = applyAnswer(readFileSync(srcPath, "utf8"), a);
+          if (updated === null)
+            return send(res, 409, JSON.stringify({ error: "no question-form block with that id" }), "application/json");
+          writeFileSync(srcPath, updated);
           send(res, 200, JSON.stringify({ ok: true }), "application/json");
         } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
       });
@@ -301,9 +307,25 @@ function main() {
       process.exit(1);
     }
     const abs = resolve(srcPath);
-    writeFileSync(abs, applyStatus(readFileSync(abs, "utf8"), { taskId, status }));
+    const source = readFileSync(abs, "utf8");
+    if (duplicateIds(source).includes(taskId)) {
+      console.error(`--set-status: id "${taskId}" is not unique — more than one block uses it. Give each block a unique id.`);
+      process.exit(1);
+    }
+    const updated = applyStatus(source, { taskId, status });
+    if (updated === null) {
+      console.error(`--set-status: no :::task with id "${taskId}" in ${abs}`);
+      process.exit(1);
+    }
+    writeFileSync(abs, updated);
     console.log(`Set ${taskId} -> ${status} in ${abs}`);
     process.exit(0);
+  }
+
+  if (existsSync(resolve(srcPath))) {
+    const dups = duplicateIds(readFileSync(resolve(srcPath), "utf8"));
+    if (dups.length)
+      console.warn(`⚠ duplicate block id(s): ${dups.join(", ")} — comments and --set-status target the first match. Make each id unique.`);
   }
 
   const server = createServer({ srcPath: resolve(srcPath), kind });
