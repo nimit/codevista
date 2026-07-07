@@ -72,7 +72,7 @@ function renderDiff(node) {
     ? `<ul class="diff-annotations">${node.annotations
         .map((a) => `<li><b>L${escapeHtml(a.lines)}</b> ${escapeHtml(a.note)}</li>`)
         .join("")}</ul>` : "";
-  return `${file}${summary}<div class="diff diff-${node.mode}">${rows}</div>${ann}`;
+  return `${file}${summary}<div class="diff">${rows}</div>${ann}`;
 }
 
 function renderFileTree(node) {

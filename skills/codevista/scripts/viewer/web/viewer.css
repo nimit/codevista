@@ -194,7 +194,8 @@ body {
 .cc-toggle{ display:inline-flex; align-items:center; gap:6px; color:var(--wf-muted);
   font-size:13px; cursor:pointer; user-select:none; }
 .cc-toggle input{ accent-color:var(--wf-accent); margin:0; }
-.cc-actions{ display:flex; gap:8px; }
+.cc-actions{ display:flex; align-items:center; gap:8px; }
+.cc-error{ color:var(--wf-warn); font-size:12px; }
 .comment-composer button{ font:inherit; cursor:pointer; border-radius:8px; padding:6px 14px;
   border:1.4px solid var(--wf-line); background:var(--wf-card); color:inherit; transition:.12s; }
 .comment-composer button:hover{ border-color:var(--wf-accent); color:var(--wf-accent); }

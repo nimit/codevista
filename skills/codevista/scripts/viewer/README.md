@@ -18,14 +18,14 @@ This is the only step that touches the network. `server.js` never does.
 
 ## Run
 
-    node bin/server.js path/to/feature.plan.md --open
+    node bin/server.js plans/feature/plan.md --open
 
 Opens a live, commentable view at http://127.0.0.1:4321 (auto-reloads on edit).
 Reviewer comments are written to `comments.json` next to the source.
 
 ## Export a shareable single file
 
-    node bin/server.js path/to/feature.plan.md --export feature.html
+    node bin/server.js plans/feature/plan.md --export feature.html
 
 Produces one self-contained HTML file (CSS + rendered content inlined, no
 external refs). Static: no live comments, no mermaid SVG.

@@ -1,6 +1,7 @@
 # The authoring format — the block contract (full spec)
 
-This is the canonical grammar for `*.plan.md` / `*.recap.md` files. **It is the
+This is the canonical grammar for plan/recap documents (`plans/<slug>/plan.md` /
+`recaps/<slug>/recap.md`). **It is the
 contract** — it replaces any hosted block-catalog lookup (there is no
 `get-plan-blocks` round-trip; the grammar here *is* the schema). The local
 renderer parses this format client-side into rich blocks.
@@ -30,7 +31,7 @@ A fence is ` ```<type> key=value key="quoted value" ` … ` ``` `. The info
 string's first token is the block type; the rest are attributes. Supported leaf
 types and their bodies:
 
-- **`diff`** — `file=<path> lang=<id> summary="…" mode=split|unified id=<id>`.
+- **`diff`** — `file=<path> lang=<id> summary="…" id=<id>`.
   Body is a standard unified diff (lines start with `+`, `-`, or space; `@@`
   hunk headers optional). Annotate via `note@<line>: …` lines at the end of the
   body.
@@ -83,9 +84,12 @@ types and their bodies:
 - **`:::columns`** — children are leaf blocks; each child's `label` attr names
   the column (use `Before`/`After`). Wide surfaces (`desktop`/`browser`)
   auto-stack; narrow surfaces sit side by side.
-- **`:::callout tone=decision`** — markdown body (alternative to the fenced
-  `callout` when you want nested blocks).
-- **`:::question-form` title="Open Questions"** — body grammar:
+- **`:::callout tone=decision`** — markdown body, same as the fenced `callout`
+  (just nicer to author for multi-paragraph prose). Markdown only — a fenced
+  block inside it renders as a plain code fence, not as a rich block.
+- **`:::question-form` title="Open Questions"** — **top-level only** (not inside
+  `:::tabs`/`:::columns`; the answer write-back addresses top-level ids, and the
+  parser renders a nested one as a visible authoring error). Body grammar:
   ```
   q single|multi|freeform "Question text?" answer="free-text write-in"?
     - "Option A" recommended selected detail="…"
@@ -96,7 +100,9 @@ types and their bodies:
   `answer="…"` on the `q` line. The viewer writes `selected` / `answer` back into
   the file via `POST /answers` when a reviewer answers in the served page.
 - **`:::task`** — `id=<id> status=pending|running|done|blocked risk=normal|high`.
-  A unit of implementation work, written as human-readable intent (never
+  **Top-level only** (not inside `:::tabs`/`:::columns`; `--set-status` addresses
+  top-level ids, and the parser renders a nested one as a visible authoring
+  error). A unit of implementation work, written as human-readable intent (never
   pre-baked code). Body is one `key: value` per line:
   ```
   title: <one-line summary of the task>          (required)
@@ -126,7 +132,7 @@ kind: plan        # plan | recap
 ```
 
 Only `title` and `kind` are read; both optional (defaults: title from first `#`
-heading, kind from file extension).
+heading, kind from the basename — `recap.md` → recap, anything else → plan).
 
 ## AST node shapes (the testable contract)
 
@@ -137,8 +143,8 @@ has a stable `id` (explicit `id=` attr, else `b<index>`), unique per document (s
 ```js
 { type:'richtext',  id, md:string }
 { type:'callout',   id, tone:'info'|'decision'|'warn'|'ok', md:string }
-{ type:'diff',      id, file, lang, summary, mode:'split'|'unified',
-                    hunks:[{header, lines:[{kind:'add'|'del'|'ctx', text, n}]}],
+{ type:'diff',      id, file, lang, summary,
+                    hunks:[{header, lines:[{kind:'add'|'del'|'ctx', text}]}],
                     annotations:[{lines, note}] }
 { type:'file-tree', id, entries:[{depth, change:'added'|'modified'|'removed'|'renamed'|null, path, to?, note?}] }
 { type:'wireframe', id, surface, label, skeleton:boolean, html:string }

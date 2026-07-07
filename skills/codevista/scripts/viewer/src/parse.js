@@ -40,11 +40,18 @@ export function tokenize(source) {
       const inner = [];
       i++;
       let depth = 1;
+      // ```-fenced children may legitimately contain :::-looking lines (e.g. a
+      // code sample documenting this format), so directive open/close only
+      // counts outside fences.
+      let inFence = false;
       for (; i < lines.length; i++) {
-        if (DIR_OPEN_RE.test(lines[i])) depth++;
-        if (DIR_CLOSE_RE.test(lines[i])) {
-          depth--;
-          if (depth === 0) break;
+        if (lines[i].startsWith("```")) inFence = !inFence;
+        else if (!inFence) {
+          if (DIR_OPEN_RE.test(lines[i])) depth++;
+          if (DIR_CLOSE_RE.test(lines[i])) {
+            depth--;
+            if (depth === 0) break;
+          }
         }
         inner.push(lines[i]);
       }
@@ -98,7 +105,8 @@ export function locate(source, blockId) {
 // ambiguous — locate() always resolves to the FIRST match — so the CLI hard-errors
 // and the server warns when any exist. Pure; mirrors the exact id logic used by
 // parse()/locate() so the three always agree. (Positional ids can't collide with
-// each other; only reused explicit `id=` values do.)
+// each other, but an explicit `id=` can collide with another explicit id or with
+// a positional `b<index>`; counting effective ids catches both.)
 export function duplicateIds(source) {
   const { body } = splitFrontmatter(source);
   const segs = tokenize(body);
@@ -112,7 +120,7 @@ export function duplicateIds(source) {
 
 export function splitFrontmatter(source) {
   if (typeof source !== "string") source = "";   // total on a missing/unreadable source
-  const m = source.match(/^---\n([\s\S]*?)\n---\n?/);
+  const m = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   const meta = { title: "", kind: "" };
   let body = source;
   if (m) {
@@ -146,7 +154,14 @@ function blockFromSegment(seg, id) {
   if (seg.type === "tabs" || seg.type === "columns") {
     const childSegs = tokenize(seg.inner).filter((s) => s.kind === "fence" || s.kind === "dir");
     const children = childSegs.map((cs, j) => {
-      const child = blockFromSegment(cs, `${id}.${j}`);
+      // question-form and :::task are id-addressed by the write-back rails
+      // (POST /answers, --set-status), which resolve top-level blocks only —
+      // nested they'd render interactive UI that can never save. Surface the
+      // authoring error visibly instead of shipping a dead form.
+      const child = cs.kind === "dir" && (cs.type === "question-form" || cs.type === "task")
+        ? { type: "callout", id: `${id}.${j}`, tone: "warn",
+            md: "Authoring error: a `:::" + cs.type + "` block cannot be nested inside `:::tabs`/`:::columns` — its answers/status write-back only resolves top-level blocks. Move it to the top level." }
+        : blockFromSegment(cs, `${id}.${j}`);
       const label = cs.attrs.label || cs.attrs.file || cs.attrs.path || `Tab ${j + 1}`;
       return { label, surface: cs.attrs.surface, block: child };
     });

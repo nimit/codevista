@@ -26,7 +26,7 @@ export function parseDiff(attrs, body, id) {
   }
   return {
     type: "diff", id, file: attrs.file || "", lang: attrs.lang || "",
-    summary: attrs.summary || "", mode: attrs.mode === "unified" ? "unified" : "split",
+    summary: attrs.summary || "",
     hunks, annotations,
   };
 }
@@ -104,13 +104,14 @@ export function parseApi(attrs, body, id) {
 }
 
 function attrsFromTail(tail) {
-  // reuse parseAttrs semantics but allow `-- note` suffix
-  const noteSplit = tail.split(/\s+--\s+/);
+  // reuse parseAttrs semantics but allow `-- note` suffix; only the FIRST
+  // ` -- ` starts the note, so a note may itself contain `--`.
+  const split = tail.match(/^(.*?)(?:\s+--\s+(.*))?$/);
   const a = {};
   const re = /(\w+)=("([^"]*)"|'([^']*)'|(\S+))/g;
   let m;
-  while ((m = re.exec(noteSplit[0]))) a[m[1]] = m[3] ?? m[4] ?? m[5];
-  if (noteSplit[1]) a.note = noteSplit[1].trim();
+  while ((m = re.exec(split[1]))) a[m[1]] = m[3] ?? m[4] ?? m[5];
+  if (split[2]) a.note = split[2].trim();
   return a;
 }
 

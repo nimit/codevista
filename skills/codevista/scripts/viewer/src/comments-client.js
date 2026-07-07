@@ -4,10 +4,13 @@ async function getComments() {
   return r.ok ? r.json() : [];
 }
 async function postComment(c) {
-  await fetch("/comments", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify(c),
-  });
+  try {
+    const r = await fetch("/comments", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(c),
+    });
+    return r.ok;
+  } catch { return false; }
 }
 function newId() { return "c_" + Math.random().toString(36).slice(2, 10); }
 
@@ -49,6 +52,7 @@ export async function mountComments(root) {
        <div class="cc-row">
          <label class="cc-toggle"><input type="checkbox" checked> Send to agent</label>
          <div class="cc-actions">
+           <span class="cc-error" hidden>Couldn't save — try again</span>
            <button class="c-cancel">Cancel</button>
            <button class="primary c-save">Comment</button>
          </div>
@@ -64,8 +68,10 @@ export async function mountComments(root) {
         target: box.querySelector("input").checked ? "agent" : "human",
         quote: sel && sel.length < 200 ? sel : "", createdAt: Date.now(),
       };
-      await postComment(c);
-      location.reload();
+      // only reload on a confirmed write — reloading after a failed POST would
+      // silently destroy the reviewer's typed feedback.
+      if (await postComment(c)) location.reload();
+      else box.querySelector(".cc-error").hidden = false;
     };
   }
 }

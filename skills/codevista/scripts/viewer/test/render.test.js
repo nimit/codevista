@@ -15,6 +15,8 @@ test("diff renders split rows with add/del classes and summary", () => {
   assert.match(html, /class="diff-summary"[^>]*>add refresh/);
   assert.match(html, /diff-line diff-del/);
   assert.match(html, /diff-line diff-add/);
+  assert.match(html, /class="diff"/);          // mode classes are gone
+  assert.doesNotMatch(html, /diff-split|diff-unified/);
 });
 
 test("wireframe wraps html in the correct surface frame and sanitizes", () => {

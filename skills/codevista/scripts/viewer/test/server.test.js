@@ -1,13 +1,13 @@
 // test/server.test.js
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import net from "node:net";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createServer, resolveCommentsPath, applyAnswer, applyStatus } from "../bin/server.js";
+import { createServer, resolveCommentsPath, applyAnswer, applyStatus, inferKind, isLoopbackHost } from "../bin/server.js";
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "server.js");
 
@@ -19,10 +19,10 @@ function start(srcPath) {
 // A raw HTTP request that bypasses WHATWG-URL normalization. `fetch` (and any
 // spec-compliant client) collapses `..`/`%2e%2e` segments before sending, so the
 // server's traversal guard can only be reached with a raw, un-normalized target.
-function rawStatus(port, target) {
+function rawStatus(port, target, host = "127.0.0.1") {
   return new Promise((resolve, reject) => {
     const c = net.connect(port, "127.0.0.1", () =>
-      c.write(`GET ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`));
+      c.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`));
     let buf = "";
     c.on("data", (d) => (buf += d));
     c.on("end", () => resolve(Number((buf.match(/^HTTP\/1\.1 (\d+)/) || [])[1])));
@@ -110,6 +110,122 @@ test("applyAnswer persists selected indices and a write-in faithfully", () => {
   assert.match(out2, /- "A" selected/);
   assert.doesNotMatch(out2, /- "C" selected/);
   assert.match(out2, /answer="also BSD"/);
+});
+
+test("POST /answers rejects an out-of-range questionIndex and leaves the file unchanged", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  const original = [':::question-form', 'q single "Q?"', '  - "A"', ":::"].join("\n");
+  writeFileSync(src, original);
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const r = await fetch(`${base}/answers`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ blockId: "b0", questionIndex: 5, kind: "single", selected: [0], custom: "" }),
+  });
+  assert.equal(r.ok, false);
+  assert.equal(readFileSync(src, "utf8"), original); // no silent no-op write
+});
+
+test("POST /answers refuses a duplicated block id instead of writing to the first match", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  const original = [
+    ':::question-form id=dup', 'q single "Q?"', '  - "A"', ":::",
+    "",
+    ':::question-form id=dup', 'q single "R?"', '  - "B"', ":::",
+  ].join("\n");
+  writeFileSync(src, original);
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const r = await fetch(`${base}/answers`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ blockId: "dup", questionIndex: 0, kind: "single", selected: [0], custom: "" }),
+  });
+  assert.equal(r.status, 409);
+  assert.equal(readFileSync(src, "utf8"), original);
+});
+
+test("GET /meta reads the title from frontmatter via splitFrontmatter", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, "---\ntitle: Front Title\nkind: plan\n---\nprose only, no heading\n");
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const meta = await (await fetch(`${base}/meta`)).json();
+  assert.equal(meta.title, "Front Title");
+});
+
+test("rejects requests whose Host header is not loopback (DNS-rebinding guard)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, "# Hi");
+  const server = await start(src);
+  after(() => server.close());
+  const port = server.address().port;
+  assert.equal(await rawStatus(port, "/content", "evil.example.com"), 403);
+  assert.equal(await rawStatus(port, "/content", `evil.example.com:${port}`), 403);
+  assert.equal(await rawStatus(port, "/content", `127.0.0.1:${port}`), 200);
+  assert.equal(await rawStatus(port, "/content", `localhost:${port}`), 200);
+});
+
+test("rejects cross-origin and non-JSON POSTs to state-changing endpoints", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, "# Hi");
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  // cross-origin POST (Origin from another site) is refused
+  const xo = await fetch(`${base}/comments`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://evil.example.com" },
+    body: JSON.stringify({ id: "c_x", blockId: "b0", text: "inject" }),
+  });
+  assert.equal(xo.status, 403);
+  // a "simple request" content-type (what a drive-by form/fetch can send) is refused
+  const tp = await fetch(`${base}/comments`, {
+    method: "POST", headers: { "content-type": "text/plain" },
+    body: JSON.stringify({ id: "c_y", blockId: "b0", text: "inject" }),
+  });
+  assert.equal(tp.status, 415);
+  assert.equal(existsSync(resolveCommentsPath(src)), false); // nothing was written
+});
+
+test("isLoopbackHost accepts loopback forms and rejects everything else", () => {
+  for (const ok of ["127.0.0.1", "127.0.0.1:4321", "localhost", "localhost:80", "[::1]", "[::1]:4321", "::1"])
+    assert.equal(isLoopbackHost(ok), true, ok);
+  for (const bad of ["evil.com", "evil.com:4321", "127.0.0.1.evil.com", "192.168.1.4:4321", "", undefined])
+    assert.equal(isLoopbackHost(bad), false, String(bad));
+});
+
+test("inferKind maps only the plan.md/recap.md basename convention (no legacy extensions)", () => {
+  assert.equal(inferKind("plans/feat/plan.md"), "plan");
+  assert.equal(inferKind("recaps/feat/recap.md"), "recap");
+  assert.equal(inferKind("recaps/feat.recap.md"), "plan"); // legacy naming: no special-case
+  assert.equal(inferKind("notes.md"), "plan");
+});
+
+test("CLI runs when installed under a path containing a space", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv space-"));
+  const pkg = join(dirname(SERVER), "..");
+  cpSync(join(pkg, "bin"), join(dir, "bin"), { recursive: true });
+  cpSync(join(pkg, "src"), join(dir, "src"), { recursive: true });
+  const r = spawnSync(process.execPath, [join(dir, "bin", "server.js"), "--help"], { encoding: "utf8" });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /Usage: server\.js/); // silent exit = the broken main guard
+});
+
+test("--export with a missing source fails cleanly with exit 1", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const r = spawnSync(process.execPath,
+    [SERVER, join(dir, "missing.plan.md"), "--export", join(dir, "out.html")], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--export failed/);
+  assert.doesNotMatch(r.stderr, /UnhandledPromiseRejection/i);
 });
 
 test("rejects path traversal on static routes", async () => {

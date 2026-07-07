@@ -143,7 +143,7 @@ skeleton register automatically. Never fake a loader with raw HTML
 outside the `wireframe` fence.
 
 **Editing an existing mockup.** To change one element, text, or color, edit the
-HTML inside that `wireframe` fence in the `.plan.md` / `.recap.md` file and
+HTML inside that `wireframe` fence in the `plan.md` / `recap.md` file and
 save — the viewer live-reloads. Keep the rest of the screen intact so
 before/after stays comparable.
 

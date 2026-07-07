@@ -13,7 +13,7 @@ rendered local plan plus its URL.
    catalog lookup — the grammar is the contract) and `references/document-quality.md`
    before authoring the document. Read `references/wireframe.md` only when the plan
    includes UI work (wireframes); skip it for non-visual plans.
-3. Write the plan to `plans/<slug>/<slug>.plan.md` (one directory per plan, so its
+3. Write the plan to `plans/<slug>/plan.md` (one directory per plan, so its
    status and `comments.json` never collide with other plans) using the FORMAT grammar: markdown for
    prose; fenced blocks for `diff`, `data-model`, `api`, `file-tree`, `wireframe`,
    `mermaid`, `annotated-code`; `:::columns`/`:::tabs`/`:::callout`/`:::question-form`
@@ -23,7 +23,7 @@ rendered local plan plus its URL.
    otherwise implement against the task's `verify`. Content only — never author
    HTML/CSS for the page chrome.
 4. Start the viewer (background) and report the URL:
-   `node scripts/viewer/bin/server.js plans/<slug>/<slug>.plan.md --open`
+   `node scripts/viewer/bin/server.js plans/<slug>/plan.md --open`
    (`scripts/viewer/…` is inside this skill's directory; keep the document path
    relative to your project.)
    Always print the `http://127.0.0.1:<port>` URL in chat. The page live-reloads
@@ -31,7 +31,7 @@ rendered local plan plus its URL.
 5. Ask the user to review and approve at that URL. This is the approval gate.
 6. To incorporate feedback: read `plans/<slug>/comments.json` (or the path the
    server printed). Each comment has `{blockId, text, target, status, quote}`. Act
-   on `target:"agent"` comments, edit `plans/<slug>/<slug>.plan.md` (the page
+   on `target:"agent"` comments, edit `plans/<slug>/plan.md` (the page
    reloads), and treat `target:"human"` as context. Re-read before major edits.
 
 ## Discipline

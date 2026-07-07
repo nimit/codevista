@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 CodeVista is **one self-contained Agent Skill** that turns an implementation plan
 or a git diff into a rich, interactive, **commentable** visual document, rendered
 fully locally in the browser. A coding agent writes only a compact
-Markdown-superset file (`*.plan.md` / `*.recap.md`); a bundled zero-dependency Node
+Markdown-superset file (`plans/<slug>/plan.md` / `recaps/<slug>/recap.md`); a bundled zero-dependency Node
 viewer renders it on `127.0.0.1`. No MCP, no hosted server, no network at runtime
 (except mermaid — see below).
 
@@ -90,9 +90,9 @@ Three consumers of that pipeline:
 **The skill layer** is a thin router. `skills/codevista/SKILL.md` picks the mode,
 then defers to one of two workflow files which the agent reads and follows:
 
-- `references/plan.md` — author `plans/<slug>.plan.md`, serve it, gate on user
+- `references/plan.md` — author `plans/<slug>/plan.md`, serve it, gate on user
   approval, incorporate `comments.json` feedback (act on `target:"agent"`).
-- `references/recap.md` — build `recaps/<slug>.recap.md` mechanically from a real
+- `references/recap.md` — build `recaps/<slug>/recap.md` mechanically from a real
   `git diff` (true-by-construction; never invent paths/fields), then serve.
 - `references/FORMAT.md` (the grammar/contract), `references/wireframe.md` (the
   wireframe token + helper-class kit), `references/document-quality.md`
@@ -113,13 +113,13 @@ node --test --test-name-pattern="tokenize" test/...js   # one test by name
 Run the viewer (paths shown from the **repo root**; the skill uses skill-relative paths):
 
 ```bash
-node skills/codevista/scripts/viewer/bin/server.js <file>.plan.md --open
-node skills/codevista/scripts/viewer/bin/server.js <file>.recap.md --export out.html
+node skills/codevista/scripts/viewer/bin/server.js plans/<slug>/plan.md --open
+node skills/codevista/scripts/viewer/bin/server.js recaps/<slug>/recap.md --export out.html
 node skills/codevista/scripts/viewer/bin/server.js --help
 ```
 
 Key flags: `--open`, `--export <file>`, `--port <n>` (default 4321, auto-increments),
-`--host`, `--kind plan|recap` (else inferred from the filename extension).
+`--host`, `--kind plan|recap` (else inferred from the basename: `recap.md` → recap).
 
 There is no lint config and no build step. Tests are the gate.
 

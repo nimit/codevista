@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tokenize, parseAttrs, locate, splitFrontmatter, duplicateIds } from "../src/parse.js";
-import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseQuestionForm, parseTask } from "../src/blocks.js";
+import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseApi, parseQuestionForm, parseTask } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
 test("parseAttrs handles bare flags, key=value, and quoted values", () => {
@@ -92,6 +92,12 @@ test("parseDataModel reads entities, change flags, fields and was:", () => {
   assert.equal(f.change, "modified");
   assert.equal(f.was, "string");
   assert.equal(f.note, "now FK");
+});
+
+test("api param notes keep text containing --", () => {
+  const node = parseApi({ method: "GET", path: "/x" },
+    "param q in=query type=string -- filter -- by name", "a1");
+  assert.equal(node.params[0].note, "filter -- by name");
 });
 
 test("parse builds full AST with containers and stable ids", () => {
@@ -231,6 +237,62 @@ test("parse wires :::task directives into task nodes with stable ids", () => {
   assert.equal(blocks[0].id, "auth-mw");
   assert.equal(blocks[0].status, "pending");
   assert.equal(blocks[0].title, "Auth middleware");
+});
+
+test("write-back blocks nested in containers become a visible authoring error", () => {
+  // question-form and :::task are id-addressed by answers/--set-status, which
+  // only resolve top-level blocks — nesting them renders interactive UI that can
+  // never save. The parser surfaces that as a warn callout instead.
+  const src = [
+    ":::tabs",
+    ':::question-form label="Q"', 'q single "Pick?"', '  - "A"', ":::",
+    ":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::",
+    "```diff file=a.ts label=D", "+x", "```",
+    ":::",
+  ].join("\n");
+  const { blocks } = parse(src);
+  assert.equal(blocks[0].type, "tabs");
+  const kids = blocks[0].tabs.map((t) => t.blocks[0]);
+  assert.equal(kids[0].type, "callout");
+  assert.equal(kids[0].tone, "warn");
+  assert.match(kids[0].md, /question-form/);
+  assert.equal(kids[1].type, "callout");
+  assert.match(kids[1].md, /task/);
+  assert.equal(kids[2].type, "diff"); // leaf children still work
+});
+
+test("parseDiff no longer emits the inert mode attribute", () => {
+  const node = parseDiff({ file: "a.ts", mode: "unified" }, "+x", "d1");
+  assert.equal("mode" in node, false);
+});
+
+test("splitFrontmatter handles CRLF line endings", () => {
+  const src = "---\r\ntitle: T\r\nkind: recap\r\n---\r\n# Body\r\n";
+  const { meta, body } = splitFrontmatter(src);
+  assert.equal(meta.title, "T");
+  assert.equal(meta.kind, "recap");
+  assert.doesNotMatch(body, /^---/);
+});
+
+test("directive scanning ignores :::-like lines inside fenced children", () => {
+  const src = [
+    ":::tabs",
+    "```annotated-code file=x lang=md label=A",
+    "example of a directive:",
+    ":::task id=demo",
+    "```",
+    ":::",
+    "",
+    "## After the tabs",
+  ].join("\n");
+  const segs = tokenize(src);
+  assert.equal(segs.length, 2);
+  assert.equal(segs[0].kind, "dir");
+  assert.equal(segs[0].endLine, 5);
+  assert.equal(segs[1].kind, "md");
+  assert.match(segs[1].text, /## After the tabs/);
+  // the fenced body survives intact inside the container
+  assert.match(segs[0].inner, /:::task id=demo/);
 });
 
 // Regression: when /content can't read the source file it returns an error

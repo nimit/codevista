@@ -18,8 +18,8 @@ codevista/
     codevista/                     # one self-contained Agent Skill (plan + recap)
       SKILL.md                     # thin router: picks plan vs recap mode
       references/
-        plan.md                    # plan workflow: author <slug>.plan.md, serve, read comments
-        recap.md                   # recap workflow: diff -> <slug>.recap.md via plain git, serve
+        plan.md                    # plan workflow: author plans/<slug>/plan.md, serve, read comments
+        recap.md                   # recap workflow: diff -> recaps/<slug>/recap.md via plain git, serve
         FORMAT.md                  # the authoring grammar IS the contract
         wireframe.md               # wireframe kit (tokens, helper classes, surfaces)
         document-quality.md        # outcome-first plan-quality rules
@@ -30,7 +30,7 @@ codevista/
         web/                       # viewer shell + theme CSS
         vendor/                    # offline libs (marked, DOMPurify; mermaid loads from CDN)
         test/                      # node:test — parse, render, server, e2e, export
-        fixtures/                  # sample.plan.md / sample.recap.md
+        fixtures/                  # sample-plan/plan.md / sample-recap/recap.md
   LICENSE
 ```
 
@@ -77,7 +77,7 @@ Node ≥ 18 and the vendored files on startup.
 The skill drives it, but you can run the viewer directly:
 
 ```
-node skills/codevista/scripts/viewer/bin/server.js path/to/feature.plan.md --open
+node skills/codevista/scripts/viewer/bin/server.js plans/feature/plan.md --open
 ```
 
 Opens `http://127.0.0.1:4321` — live-reloads on edit; reviewer comments land in

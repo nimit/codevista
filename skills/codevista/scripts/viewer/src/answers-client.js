@@ -6,11 +6,13 @@
 // metadata and the listed `selected` options independently, so the client
 // (which knows single vs multi) decides how they combine.
 async function save(a) {
-  const r = await fetch("/answers", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify(a),
-  });
-  return r.ok;
+  try {
+    const r = await fetch("/answers", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(a),
+    });
+    return r.ok;
+  } catch { return false; } // network error = failed save, callers revert
 }
 
 function setPressed(q) {
@@ -40,14 +42,19 @@ function buildCustomCard(text) {
 export function mountAnswers(root) {
   root.querySelectorAll(".question-form").forEach((form) => {
     const blockId = form.closest(".block").dataset.blockId;
-    const send = (qi) => {
+    const send = async (qi) => {
       const q = form.querySelector(`.qf-q[data-q="${qi}"]`);
-      window.__lvSkipReload = true; // skip the one SSE reload our own write triggers
-      return save({
+      // Set BEFORE the POST (the server's write can beat the response back via
+      // fs.watch), but clear on failure — a failed save writes nothing, so a
+      // dangling flag would swallow the next real agent-edit reload.
+      window.__lvSkipReload = true;
+      const ok = await save({
         blockId, questionIndex: Number(qi), kind: q.dataset.kind,
         selected: [...q.querySelectorAll(".qf-opt.qf-selected[data-opt]")].map((b) => Number(b.dataset.opt)),
         custom: customText(q),
       });
+      if (!ok) window.__lvSkipReload = false;
+      return ok;
     };
 
     // Click a listed option: single clears its siblings and drops any custom

@@ -3,10 +3,11 @@
 import http from "node:http";
 import { readFile, readFileSync, writeFileSync, existsSync, watch } from "node:fs";
 import { join, dirname, resolve, extname, basename } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
-import { parse, locate, duplicateIds } from "../src/parse.js";
+import { parse, locate, duplicateIds, splitFrontmatter } from "../src/parse.js";
 import { render } from "../src/render.js";
+import { sanitizeHtml } from "../src/sanitize.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG = resolve(__dirname, "..");           // scripts/viewer/
@@ -17,6 +18,24 @@ const MIME = { ".js": "text/javascript", ".mjs": "text/javascript", ".css": "tex
 
 export function resolveCommentsPath(srcPath) {
   return join(dirname(resolve(srcPath)), "comments.json");
+}
+
+// Document kind from the filename: the plans/<slug>/plan.md and
+// recaps/<slug>/recap.md convention. Anything else defaults to plan
+// (override with --kind).
+export function inferKind(srcPath) {
+  return basename(srcPath) === "recap.md" ? "recap" : "plan";
+}
+
+// True for the loopback spellings a local browser can legitimately send in
+// Host/Origin. Anything else on a loopback-bound server means DNS rebinding or
+// a cross-origin request — both refused.
+export function isLoopbackHost(raw) {
+  let h = String(raw ?? "").trim().toLowerCase();
+  const bracketed = h.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) h = bracketed[1];
+  else if ((h.match(/:/g) || []).length <= 1) h = h.replace(/:\d+$/, "");
+  return h === "127.0.0.1" || h === "localhost" || h === "::1";
 }
 
 function readComments(srcPath) {
@@ -44,8 +63,9 @@ function toggleFlag(line, flag, on) {
 // and `custom` sets answer="…". Faithful persistence — the client (which knows
 // single vs multi) decides how options and a write-in combine, so the server
 // just writes what it is told. Pure + exported so it is unit-testable. Returns
-// null when blockId does not resolve to a question-form block, so the caller can
-// surface an error instead of silently writing nothing.
+// null when blockId does not resolve to a question-form block OR questionIndex
+// does not match a question in it, so the caller can surface an error instead
+// of silently writing nothing (a no-op must never look like a success).
 export function applyAnswer(source, { blockId, questionIndex, kind, selected = [], custom = "" }) {
   const loc = locate(source, blockId);
   if (!loc || loc.type !== "question-form") return null;
@@ -54,7 +74,7 @@ export function applyAnswer(source, { blockId, questionIndex, kind, selected = [
   for (let i = loc.startLine; i <= loc.endLine; i++)
     if (/^q\s+(single|multi|freeform)\b/.test(lines[i])) qLines.push(i);
   const qStart = qLines[questionIndex];
-  if (qStart == null) return source;
+  if (qStart == null) return null;
   const qEnd = qLines[questionIndex + 1] ?? (loc.endLine + 1);
 
   const clean = String(custom).replace(/[\r\n]+/g, " ").replace(/"/g, "'").trim();
@@ -120,6 +140,27 @@ export function createServer({ srcPath, kind }) {
   const server = http.createServer((req, res) => {
     const url = req.url.split("?")[0];
 
+    // Trust boundary. When bound to loopback (the default), a non-loopback Host
+    // means the browser was pointed here via a DNS-rebound name — refuse before
+    // serving anything. POSTs additionally must be same-site (no foreign Origin)
+    // and real JSON: a drive-by page can only emit "simple" cross-origin
+    // requests (form/text-plain, no preflight), and comments feed the agent, so
+    // both checks matter.
+    const addr = server.address();
+    const boundLoopback = !addr || typeof addr === "string" || isLoopbackHost(addr.address);
+    if (boundLoopback && !isLoopbackHost(req.headers.host)) return send(res, 403, "forbidden host");
+    if (req.method === "POST") {
+      const origin = req.headers.origin;
+      if (origin) {
+        let sameSite = false;
+        try { sameSite = new URL(origin).host === String(req.headers.host || "") } catch { /* malformed */ }
+        if (!sameSite && !(boundLoopback && isLoopbackHost(origin.replace(/^https?:\/\//, ""))))
+          return send(res, 403, "cross-origin write refused");
+      }
+      if (!String(req.headers["content-type"] || "").toLowerCase().includes("application/json"))
+        return send(res, 415, "expected application/json");
+    }
+
     if (url === "/" || url === "/index.html") {
       return readFile(join(PKG, "web", "viewer.html"), (e, b) =>
         e ? send(res, 500, "no viewer") : send(res, 200, b, "text/html"));
@@ -132,7 +173,7 @@ export function createServer({ srcPath, kind }) {
     }
     if (url === "/meta") {
       const source = existsSync(srcPath) ? readFileSync(srcPath, "utf8") : "";
-      const title = (source.match(/^#\s+(.+)$/m) || [, basename(srcPath)])[1];
+      const title = splitFrontmatter(source).meta.title || basename(srcPath);
       return send(res, 200, JSON.stringify({ title, kind, path: srcPath }), "application/json");
     }
     if (url === "/comments" && req.method === "GET") {
@@ -156,12 +197,19 @@ export function createServer({ srcPath, kind }) {
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
         let a; try { a = JSON.parse(raw); } catch { return send(res, 400, "bad json"); }
+        if (typeof a?.blockId !== "string" || !Number.isInteger(a.questionIndex) || a.questionIndex < 0)
+          return send(res, 400, JSON.stringify({ error: "expected { blockId: string, questionIndex: int >= 0 }" }), "application/json");
         try {
+          const source = readFileSync(srcPath, "utf8");
+          // same faithfulness bar as --set-status: a duplicated id would silently
+          // write to the first match, so refuse instead.
+          if (duplicateIds(source).includes(a.blockId))
+            return send(res, 409, JSON.stringify({ error: `block id "${a.blockId}" is not unique` }), "application/json");
           // rewrite the answered line in place — fs.watch turns this into an SSE
           // reload (the originating tab suppresses that one; see answers-client.js).
-          const updated = applyAnswer(readFileSync(srcPath, "utf8"), a);
+          const updated = applyAnswer(source, a);
           if (updated === null)
-            return send(res, 409, JSON.stringify({ error: "no question-form block with that id" }), "application/json");
+            return send(res, 409, JSON.stringify({ error: "no question-form block/question with that id and index" }), "application/json");
           writeFileSync(srcPath, updated);
           send(res, 200, JSON.stringify({ ok: true }), "application/json");
         } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
@@ -214,9 +262,11 @@ function openBrowser(url) {
 export async function buildStandalone(srcPath) {
   const source = readFileSync(srcPath, "utf8");
   const css = readFileSync(join(PKG, "web", "viewer.css"), "utf8");
-  const { marked } = await import(join(PKG, "vendor", "marked.esm.js"));
+  const { marked } = await import(pathToFileURL(join(PKG, "vendor", "marked.esm.js")).href);
   const { blocks, meta } = parse(source);
-  const body = render(blocks, { md: (s) => marked.parse(s) }); // sanitize = regex fallback
+  // markdown output is sanitized too — marked passes raw HTML through, and
+  // richtext is the biggest injection surface in a shared/archived export.
+  const body = render(blocks, { md: (s) => sanitizeHtml(marked.parse(s)) });
   return `<!doctype html><html data-theme="dark"><head><meta charset="utf-8">
 <title>${meta.title || "Visual plan"}</title><style>${css}</style></head>
 <body><div class="topbar"><span class="title">${meta.title || ""}</span></div>
@@ -241,13 +291,16 @@ function checkEnv() {
 }
 
 // ---- CLI ----
-const HELP = `Usage: server.js <source.(plan|recap).md> [options]
+const HELP = `Usage: server.js <source> [options]
 
 Serve a CodeVista plan/recap file as a live, commentable view on 127.0.0.1,
 or export it to a single self-contained HTML file.
 
 Arguments:
-  <source>             Path to the .plan.md / .recap.md file to render.
+  <source>             Path to the document: plans/<slug>/plan.md or
+                       recaps/<slug>/recap.md (kind is inferred from the
+                       basename; anything else is a plan unless --kind says
+                       otherwise).
 
 Options:
   --open               Open the served URL in your default browser.
@@ -259,10 +312,10 @@ Options:
   -h, --help           Show this help and exit.
 
 Examples:
-  server.js plans/feature.plan.md --open
-  server.js recaps/branch.recap.md --port 5000
-  server.js plans/feature.plan.md --export plan.html
-  server.js plans/feat/feat.plan.md --set-status auth-mw=done
+  server.js plans/feature/plan.md --open
+  server.js recaps/branch/recap.md --port 5000
+  server.js plans/feature/plan.md --export plan.html
+  server.js plans/feature/plan.md --set-status auth-mw=done
 
 Exit codes: 0 success · 1 bad usage / missing file / unmet runtime requirement.`;
 
@@ -284,7 +337,7 @@ function main() {
   };
   const host = get("--host", "127.0.0.1");
   const wantPort = parseInt(get("--port", "4321"), 10);
-  const kind = get("--kind", srcPath.endsWith(".recap.md") ? "recap" : "plan");
+  const kind = get("--kind", inferKind(srcPath));
 
   const exportTo = get("--export", null);
   if (exportTo) {
@@ -292,6 +345,9 @@ function main() {
       writeFileSync(resolve(exportTo), html);
       console.log(`Exported standalone: ${resolve(exportTo)}`);
       process.exit(0);
+    }).catch((err) => {
+      console.error(`--export failed: ${err.message}`);
+      process.exit(1);
     });
     return;
   }
@@ -331,11 +387,15 @@ function main() {
   const server = createServer({ srcPath: resolve(srcPath), kind });
 
   const tryListen = (port, attempts) => {
-    server.once("error", (err) => {
+    const onError = (err) => {
       if (err.code === "EADDRINUSE" && attempts > 0) tryListen(port + 1, attempts - 1);
       else { console.error(err.message); process.exit(1); }
-    });
+    };
+    server.once("error", onError);
     server.listen(port, host, () => {
+      // don't leave the retry handler armed on a live server — a later runtime
+      // 'error' must not call listen() again on an already-listening server.
+      server.removeListener("error", onError);
       const url = `http://${host}:${port}`;
       console.log(`Visual ${kind} ready: ${url}`);
       console.log(`Source:   ${resolve(srcPath)}`);
@@ -346,4 +406,6 @@ function main() {
   tryListen(wantPort, 15);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// pathToFileURL handles percent-encoding (paths with spaces) and Windows drive
+// letters — naive `file://${argv[1]}` comparison silently skips main() on both.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

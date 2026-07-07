@@ -8,18 +8,28 @@ import DOMPurify from "/vendor/purify.es.mjs";
 
 // mermaid is online-only by design: it lazy-loads diagram-type chunks relative to
 // its own URL, so we load it from the CDN (where those chunks live) instead of
-// vendoring its multi-MB chunk tree. Loaded defensively — when offline or the CDN
-// is unreachable the import simply rejects, `.mermaid` blocks keep showing their
-// source text, and the page still works. marked + DOMPurify stay vendored/offline.
+// vendoring its multi-MB chunk tree. Loaded in the BACKGROUND — first paint must
+// never wait on the network (a blackholed CDN would otherwise stall the whole
+// page until the browser's fetch timeout). When it arrives, diagrams upgrade in
+// place; offline they keep showing source text. marked + DOMPurify stay vendored.
 const MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.esm.min.mjs";
 let mermaid = null;
-try {
-  mermaid = (await import(MERMAID_URL)).default;
-} catch { /* offline or CDN unreachable; diagrams degrade to source text */ }
+import(MERMAID_URL).then((m) => {
+  mermaid = m.default;
+  mermaid.initialize({ startOnLoad: false, theme: document.documentElement.dataset.theme === "dark" ? "dark" : "default" });
+  runMermaid();
+}).catch(() => { /* offline or CDN unreachable; diagrams degrade to source text */ });
+
+async function runMermaid() {
+  if (!mermaid) return;
+  try { await mermaid.run({ querySelector: ".mermaid" }); } catch { /* degrade to source */ }
+}
 
 const doc = document.getElementById("doc");
-const md = (s) => marked.parse(s);
+// sanitize markdown output too — marked passes raw HTML through, and richtext
+// is the biggest injection surface, not the wireframe/diagram fragments.
 const sanitize = (h) => DOMPurify.sanitize(h, { ADD_ATTR: ["data-icon", "data-primary", "target"] });
+const md = (s) => sanitize(marked.parse(s));
 
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
@@ -51,9 +61,7 @@ async function load(flash) {
     doc.classList.add("reload-flash");
     setTimeout(() => doc.classList.remove("reload-flash"), 600);
   }
-  if (mermaid) {
-    try { await mermaid.run({ querySelector: ".mermaid" }); } catch { /* degrade to source */ }
-  }
+  await runMermaid();
   wireTabs();
   await mountComments(doc);
   mountAnswers(doc);

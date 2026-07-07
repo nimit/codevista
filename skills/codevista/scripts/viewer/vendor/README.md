@@ -10,8 +10,9 @@ only serves these files locally.
 | marked.esm.js | marked | 12.0.2 | MIT | Markdown → HTML (browser) |
 | purify.es.mjs | dompurify | 3.4.10 | Apache-2.0 / MPL-2.0 | HTML-fragment sanitizing (browser) |
 
-Versions are pinned **exactly** in `bin/setup.mjs`, so re-running setup fetches
-the same bytes that are committed here.
+Versions **and SHA-256 hashes** are pinned in `bin/setup.mjs`: setup verifies the
+downloaded bytes against the hashes below and refuses to write a mismatch, so
+re-running setup can only ever produce the same bytes that are committed here.
 
 > **mermaid is not vendored.** It lazy-loads diagram-type chunks relative to its
 > own URL, so the viewer loads it from a CDN at runtime instead of vendoring its
@@ -49,7 +50,8 @@ Committed blobs are **not** seen by Dependabot / `npm audit`, so nothing will
 alert you to a CVE — most importantly in **DOMPurify**, which is the XSS sanitizer.
 Periodically refresh it yourself:
 
-1. Bump the pinned version(s) in `bin/setup.mjs`.
+1. Bump the pinned version(s) **and their `sha256` values** in `bin/setup.mjs`
+   (setup rejects a download whose hash doesn't match the pin).
 2. Re-run `npm run setup` on a networked machine.
-3. Recompute and replace the SHA-256 lines above (`sha256sum vendor/*.js vendor/*.mjs`).
+3. Replace the SHA-256 lines above to match the new pins (`sha256sum vendor/*.js vendor/*.mjs`).
 4. Re-commit the changed files.

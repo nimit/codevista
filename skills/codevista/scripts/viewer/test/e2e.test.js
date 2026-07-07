@@ -10,7 +10,7 @@ import { render } from "../src/render.js";
 import { createServer, resolveCommentsPath, applyStatus } from "../bin/server.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixture = join(here, "..", "fixtures", "sample.plan.md");
+const fixture = join(here, "..", "fixtures", "sample-plan", "plan.md");
 
 test("sample plan parses into the expected block sequence", () => {
   const { meta, blocks } = parse(readFileSync(fixture, "utf8"));
