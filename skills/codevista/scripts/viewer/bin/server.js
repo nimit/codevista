@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // bin/server.js  (Node built-ins only)
 import http from "node:http";
-import { readFile, readFileSync, writeFileSync, existsSync, watch } from "node:fs";
+import { readFile, readFileSync, writeFileSync, renameSync, existsSync, watch } from "node:fs";
 import { join, dirname, resolve, extname, basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
-import { parse, locate, duplicateIds, splitFrontmatter } from "../src/parse.js";
+import { parse, locate, duplicateIds, splitFrontmatter, normalizeStatefulIds } from "../src/parse.js";
 import { render } from "../src/render.js";
 import { sanitizeHtml } from "../src/sanitize.js";
+import { setLineAttr, setLineFlag } from "../src/attrs.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG = resolve(__dirname, "..");           // scripts/viewer/
@@ -38,24 +39,22 @@ export function isLoopbackHost(raw) {
   return h === "127.0.0.1" || h === "localhost" || h === "::1";
 }
 
+// Write atomically: a temp sibling then rename over the target (atomic on one
+// filesystem). Prevents a torn read by /content and gives fs.watch a single
+// clean event (the temp basename is filtered out; the rename fires one reload).
+function atomicWrite(path, data) {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, data);
+  renameSync(tmp, path);
+}
+
 function readComments(srcPath) {
   const p = resolveCommentsPath(srcPath);
   if (!existsSync(p)) return [];
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return []; }
 }
 function writeComments(srcPath, list) {
-  writeFileSync(resolveCommentsPath(srcPath), JSON.stringify(list, null, 2));
-}
-
-// Set or remove a key="value" attr on a single line (empty value removes it).
-function setAttr(line, key, value) {
-  const stripped = line.replace(new RegExp(`\\s*${key}="[^"]*"`), "");
-  return value ? `${stripped} ${key}="${value}"` : stripped;
-}
-// Add or remove a bare word flag (e.g. `selected`) on a single line.
-function toggleFlag(line, flag, on) {
-  const stripped = line.replace(new RegExp(`\\s*\\b${flag}\\b`), "");
-  return on ? `${stripped} ${flag}` : stripped;
+  atomicWrite(resolveCommentsPath(srcPath), JSON.stringify(list, null, 2));
 }
 
 // Record a reviewer's answer by rewriting ONLY the matched question/option lines
@@ -78,12 +77,12 @@ export function applyAnswer(source, { blockId, questionIndex, kind, selected = [
   const qEnd = qLines[questionIndex + 1] ?? (loc.endLine + 1);
 
   const clean = String(custom).replace(/[\r\n]+/g, " ").replace(/"/g, "'").trim();
-  lines[qStart] = setAttr(lines[qStart], "answer", clean);
+  lines[qStart] = setLineAttr(lines[qStart], "answer", clean);
 
   let optIdx = 0;
   for (let i = qStart + 1; i < qEnd; i++) {
     if (!/^\s*-\s*"/.test(lines[i])) continue;
-    lines[i] = toggleFlag(lines[i], "selected", selected.includes(optIdx));
+    lines[i] = setLineFlag(lines[i], "selected", selected.includes(optIdx));
     optIdx++;
   }
   return lines.join("\n");
@@ -106,12 +105,8 @@ export function applyTestSelection(source, { blockId, index, skip }) {
     itemIdx++;
   }
   if (target < 0) return null;
-  // Toggle `skip` only in the tail AFTER the quoted description — a bare
-  // toggleFlag would also strip the word "skip" out of the test text itself.
-  const m = lines[target].match(/^(\s*-\s*"[^"]*")(.*)$/);
-  if (!m) return null;
-  const tail = m[2].replace(/\s*\bskip\b/g, "");
-  lines[target] = m[1] + (skip ? `${tail} skip` : tail);
+  // quote-aware flag toggle never touches the word "skip" inside the description.
+  lines[target] = setLineFlag(lines[target], "skip", skip);
   return lines.join("\n");
 }
 
@@ -125,11 +120,7 @@ export function applyStatus(source, { taskId, status }) {
   const loc = locate(source, taskId);
   if (!loc || loc.type !== "task") return null;
   const lines = source.split(/\r?\n/);
-  const line = lines[loc.startLine];
-  const re = /\bstatus=("[^"]*"|'[^']*'|\S+)/;
-  lines[loc.startLine] = re.test(line)
-    ? line.replace(re, `status=${status}`)
-    : `${line.replace(/\s+$/, "")} status=${status}`;
+  lines[loc.startLine] = setLineAttr(lines[loc.startLine], "status", status, false);
   return lines.join("\n");
 }
 
@@ -193,7 +184,9 @@ export function createServer({ srcPath, kind }) {
     }
     if (url === "/content") {
       try {
-        const source = readFileSync(srcPath, "utf8");
+        let source = readFileSync(srcPath, "utf8");
+        const norm = normalizeStatefulIds(source);
+        if (norm.changed) { atomicWrite(srcPath, norm.source); source = norm.source; }
         return send(res, 200, JSON.stringify({ source, path: srcPath }), "application/json");
       } catch { return send(res, 404, JSON.stringify({ error: "source missing" }), "application/json"); }
     }
@@ -242,7 +235,7 @@ export function createServer({ srcPath, kind }) {
           const updated = applyAnswer(source, a);
           if (updated === null)
             return send(res, 409, JSON.stringify({ error: "no question-form block/question with that id and index" }), "application/json");
-          writeFileSync(srcPath, updated);
+          atomicWrite(srcPath, updated);
           send(res, 200, JSON.stringify({ ok: true }), "application/json");
         } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
       });
@@ -266,7 +259,7 @@ export function createServer({ srcPath, kind }) {
           const updated = applyTestSelection(source, { ...t, skip: !!t.skip });
           if (updated === null)
             return send(res, 409, JSON.stringify({ error: "no tests block/item with that id and index" }), "application/json");
-          writeFileSync(srcPath, updated);
+          atomicWrite(srcPath, updated);
           send(res, 200, JSON.stringify({ ok: true }), "application/json");
         } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
       });
@@ -429,13 +422,16 @@ function main() {
       console.error(`--set-status: no :::task with id "${taskId}" in ${abs}`);
       process.exit(1);
     }
-    writeFileSync(abs, updated);
+    atomicWrite(abs, updated);
     console.log(`Set ${taskId} -> ${status} in ${abs}`);
     process.exit(0);
   }
 
   if (existsSync(resolve(srcPath))) {
-    const dups = duplicateIds(readFileSync(resolve(srcPath), "utf8"));
+    const abs = resolve(srcPath);
+    const norm = normalizeStatefulIds(readFileSync(abs, "utf8"));
+    if (norm.changed) atomicWrite(abs, norm.source);
+    const dups = duplicateIds(norm.source);
     if (dups.length)
       console.warn(`⚠ duplicate block id(s): ${dups.join(", ")} — comments and --set-status target the first match. Make each id unique.`);
   }

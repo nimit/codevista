@@ -121,7 +121,9 @@ technical layer, and keep files that change together together. Then draw task
 boundaries so each task is the smallest unit worth an independent review gate:
 fold setup, scaffolding, and docs into the task whose deliverable needs them, and
 split only where a reviewer could meaningfully accept one task while rejecting its
-neighbor. Each task carries human-readable intent, never pre-baked code:
+neighbor. Give every `:::task` an explicit random `id=` (e.g. `id=x7k2p9qa`) so
+status write-back and `depends-on` references stay stable when the plan is
+rewritten. Each task carries human-readable intent, never pre-baked code:
 
 - `title` / `outcome` / `verify` are required. `outcome` states what "done" looks
   like; `verify` is the concrete check (a command and/or a manual step). These two

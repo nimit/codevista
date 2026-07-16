@@ -1,7 +1,7 @@
 // test/server.test.js
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, cpSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import net from "node:net";
@@ -380,6 +380,50 @@ test("applyAnswer returns null when the id is not a question-form", () => {
   const src = [":::task id=t1 status=pending", "title: T", "outcome: O", "verify: V", ":::"].join("\n");
   assert.equal(applyAnswer(src, { blockId: "t1", questionIndex: 0, kind: "single", selected: [0] }), null);
   assert.equal(applyAnswer(src, { blockId: "nope", questionIndex: 0, kind: "single", selected: [0] }), null);
+});
+
+test("GET /content injects a stable id into a stateful block that lacks one", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, ["# T", "", '```tests title="T"', '- "a"', "```"].join("\n"));
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const body = await fetch(`${base}/content`).then((r) => r.json());
+  assert.match(body.source, /```tests title="T" id=[a-z0-9]{8}/);          // served source has an id
+  assert.match(readFileSync(src, "utf8"), /```tests title="T" id=[a-z0-9]{8}/); // and it was persisted
+});
+
+test("POST /answers leaves no stray temp file next to the plan", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, ["# T", "", ':::question-form title="Q"', 'q single "Pick?"', '  - "A"', '  - "B"', ":::"].join("\n"));
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  // form is block b1 — md "# T" is b0
+  const r = await fetch(`${base}/answers`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ blockId: "b1", questionIndex: 0, kind: "single", selected: [0], custom: "" }),
+  });
+  assert.equal((await r.json()).ok, true);
+  const leftovers = readdirSync(dir).filter((f) => f.includes(".tmp"));
+  assert.deepEqual(leftovers, []);
+  assert.match(readFileSync(src, "utf8"), /- "A" selected/);
+});
+
+test("applyStatus edits the status attr, not a status= inside a quoted title", () => {
+  const src = ':::task id=x title="rework the status=done path" status=pending\ntitle: T\noutcome: O\nverify: V\n:::';
+  const out = applyStatus(src, { taskId: "x", status: "done" });
+  assert.match(out, /title="rework the status=done path" status=done/);
+});
+
+test("applyTestSelection does not strip the word skip out of the description", () => {
+  const src = ['```tests title="T"', '- "skip the cache on write"', "```"].join("\n");
+  const out = applyTestSelection(src, { blockId: "b0", index: 0, skip: true });
+  assert.match(out, /- "skip the cache on write" skip/);
+  const back = applyTestSelection(out, { blockId: "b0", index: 0, skip: false });
+  assert.match(back, /- "skip the cache on write"\n/);
 });
 
 test("--set-status rewrites a task's status in the file and exits 0", () => {

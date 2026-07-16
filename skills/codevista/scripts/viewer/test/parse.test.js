@@ -1,7 +1,7 @@
 // test/parse.test.js
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { tokenize, parseAttrs, locate, splitFrontmatter, duplicateIds } from "../src/parse.js";
+import { tokenize, parseAttrs, locate, splitFrontmatter, duplicateIds, statefulBlocksMissingId, normalizeStatefulIds } from "../src/parse.js";
 import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseApi, parseQuestionForm, parseTask, parseTests } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
@@ -342,4 +342,41 @@ test("parse and splitFrontmatter are total on a non-string source", () => {
   const { meta, blocks } = parse(undefined);
   assert.equal(meta.kind, "plan");
   assert.deepEqual(blocks, []);
+});
+
+test("statefulBlocksMissingId flags task/question-form/tests without an explicit id", () => {
+  const src = [
+    "# T", "",
+    "Some prose.", "",
+    '```tests title="T"', '- "a"', "```", "",
+    ':::question-form title="Q"', 'q single "x?"', '  - "A"', ":::", "",
+    ":::task id=keep status=pending", "title: T", "outcome: O", "verify: V", ":::",
+  ].join("\n");
+  const missing = statefulBlocksMissingId(src);
+  const types = missing.map((m) => m.type).sort();
+  assert.deepEqual(types, ["question-form", "tests"]); // the id=keep task is not flagged
+});
+
+test("normalizeStatefulIds injects ids only where missing and is idempotent", () => {
+  const src = [
+    '```tests title="T"', '- "a"', "```", "",
+    ':::question-form title="Q"', 'q single "x?"', '  - "A"', ":::",
+  ].join("\n");
+  let n = 0;
+  const genId = () => `gen${n++}`;
+  const first = normalizeStatefulIds(src, genId);
+  assert.equal(first.changed, true);
+  assert.match(first.source, /```tests title="T" id=gen0/);
+  assert.match(first.source, /:::question-form title="Q" id=gen1/);
+  const second = normalizeStatefulIds(first.source, genId);
+  assert.equal(second.changed, false);
+  assert.equal(second.source, first.source);
+});
+
+test("normalizeStatefulIds avoids colliding with an existing explicit id", () => {
+  const src = [":::task id=dup status=pending", "title: T", "outcome: O", "verify: V", ":::", "",
+    '```tests title="T"', '- "a"', "```"].join("\n");
+  const genId = (() => { let i = 0; return () => (i++ === 0 ? "dup" : "fresh"); })();
+  const out = normalizeStatefulIds(src, genId);
+  assert.match(out.source, /```tests title="T" id=fresh/); // skipped the colliding "dup"
 });

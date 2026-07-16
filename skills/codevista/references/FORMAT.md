@@ -20,8 +20,11 @@ within a document.** Use a **random 8-character alphanumeric id** (e.g.
 about the same thing, say an `annotated-code` block and its `:::task`, both getting
 `id=driver-engine`), and because id lookup resolves to the *first* match, a
 collision silently misroutes id-addressed writes. A block with no `id=` gets a
-positional fallback (`b<index>`) — fine for throwaway prose, but give an explicit
-random id to anything referenced by a comment, a `depends-on`, or `--set-status`.
+positional fallback (`b<index>`) — fine for throwaway prose. **`:::task`,
+`:::question-form`, and `tests` blocks MUST carry an explicit random `id=`**
+because write-back (status, answers, test-skip) keys on it and positional ids
+shift when the plan is rewritten. The viewer auto-injects one on serve if it is
+missing, but authoring it explicitly keeps the id stable and reviewable.
 Duplicate ids are reported, not tolerated: the server warns on startup and
 `--set-status` refuses (exits non-zero) rather than editing the wrong block.
 

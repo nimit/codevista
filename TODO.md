@@ -1,6 +1,4 @@
 <!-- SKILL -->
-- changes to the plan document require regex. I believe regex based code is inherently brittle and we could perhaps come up with a way that stores programmatic state (like the task status) in another file? I want the plan to be a single source of truth and human readable so another file might defeat that purpose. need to brainstorm on how we can solve this.
-
 - optimizing is severely needed. a lot of time is wasted in learning how to create the visual plan everytime. is this inevitable or can it be improved in some way?
 
 - optimizing we can definitely perform....
@@ -10,9 +8,8 @@
 
 - divide into three skills that each need the visual part of this skill:
     -> only human-invocable
-    -> /codevista plan  (two variants: one with brainstorming & one without)
-    -> /codevista review (fold-in engineering/code-review from ~/skills/)
-    -> external integrations: I think grill-with-docs, wayfinder, & improve-codebase-architecture all might benefit from pointing to codevista to create plans (or maybe its better if it is invoked by the human because it might help. NEED TO EXPLORE THE SKILLS BEFORE MAKING THESE CHANGES) 
+    -> /codevista plan  (two variants: one with brainstorming (/codevista explore plan) & one without)
+    -> /codevista review (reference engineering/code-review from ~/skills/)
 
 <!-- IMPROVEMENTS: UI & FUNCTIONALITY -->
 lavish-axi: similar tool but uses a lot of tokens. can integrate chat window and highlight to comment (like in antigravity plans) in the server itself.

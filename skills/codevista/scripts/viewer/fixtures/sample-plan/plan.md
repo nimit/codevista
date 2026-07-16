@@ -79,13 +79,13 @@ note@4: new lookup is by hash, not raw token
 
 ## Tests
 
-```tests title="Tests to add"
+```tests title="Tests to add" id=tests-auth
 - "rotates the refresh token and invalidates the old one on use"
 - "rejects a reused (already-rotated) refresh token" skip
 - "hashes tokens at rest (no plaintext in the store)"
 ```
 
-:::question-form title="Open Questions"
+:::question-form title="Open Questions" id=open-questions
 q single "Refresh token lifetime?" answer="oifo"
   - "30 days" recommended detail="matches current mobile expectation"
   - "7 days" detail="tighter, more re-logins"

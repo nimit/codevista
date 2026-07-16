@@ -46,7 +46,9 @@ rendered local plan plus its URL.
 - Decide hard-to-reverse bets (wire format, ids, schema, auth) in the plan.
 - End the plan with an ordered `:::task` set sized for independent review; carry
   intent (title/outcome/verify + optional scope/depends-on/constraints), not
-  pre-baked code. Pin hard-to-reverse decisions in `constraints`.
+  pre-baked code. Pin hard-to-reverse decisions in `constraints`. Every `:::task`
+  (and any `:::question-form` or `tests` block) MUST have an explicit random
+  `id=` — write-back keys on it and positional ids drift across rewrites.
 - Once the `:::task` set is approved, the plan can be executed autonomously —
   see `references/execute.md` (the **execute** mode). The executor advances each
   task's `status` so this same served page becomes a live execution dashboard.

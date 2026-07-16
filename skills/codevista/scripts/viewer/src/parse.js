@@ -1,5 +1,6 @@
 // src/parse.js
 import { LEAF_PARSERS, parseQuestionForm, parseTask } from "./blocks.js";
+import { setLineAttr } from "./attrs.js";
 
 const FENCE_RE = /^```(\S+)?[ \t]*(.*)$/;   // ```type attrs
 const DIR_OPEN_RE = /^:::(\S+)[ \t]*(.*)$/; // :::type attrs
@@ -116,6 +117,50 @@ export function duplicateIds(source) {
     counts.set(id, (counts.get(id) || 0) + 1);
   });
   return [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+}
+
+// Blocks whose identity must be stable across plan rewrites because write-back
+// keys on it (status, answers, test-skip). Only these get id auto-injection.
+const STATEFUL = new Set(["task", "question-form", "tests"]);
+
+export function randomId() {
+  const abc = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) s += abc[Math.floor(Math.random() * abc.length)];
+  return s;
+}
+
+// Top-level stateful blocks relying on a positional id (no explicit id=).
+export function statefulBlocksMissingId(source) {
+  const { body } = splitFrontmatter(source);
+  const segs = tokenize(body);
+  const out = [];
+  segs.forEach((seg, i) => {
+    if (STATEFUL.has(seg.type) && !(seg.attrs && seg.attrs.id)) out.push({ type: seg.type, index: i });
+  });
+  return out;
+}
+
+// Inject a collision-free explicit id into each stateful block missing one, on
+// its opening directive/fence line (via the quote-aware editor). Returns the new
+// source and whether anything changed. `genId` is injectable for deterministic
+// tests. Idempotent: a second call on the result reports changed:false.
+export function normalizeStatefulIds(source, genId = randomId) {
+  const missing = statefulBlocksMissingId(source);
+  if (!missing.length) return { source, changed: false };
+  const { body } = splitFrontmatter(source);
+  const offset = source.split(/\r?\n/).length - body.split(/\r?\n/).length;
+  const segs = tokenize(body);
+  const used = new Set(segs.map((s) => s.attrs && s.attrs.id).filter(Boolean));
+  const lines = source.split(/\r?\n/);
+  for (const { index } of missing) {
+    let id;
+    do { id = genId(); } while (used.has(id));
+    used.add(id);
+    const ln = segs[index].startLine + offset;
+    lines[ln] = setLineAttr(lines[ln], "id", id, false);
+  }
+  return { source: lines.join("\n"), changed: true };
 }
 
 export function splitFrontmatter(source) {
