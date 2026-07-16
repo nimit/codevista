@@ -21,6 +21,8 @@ test("sample plan parses into the expected block sequence", () => {
   assert.ok(types.includes("columns"));
   assert.ok(types.includes("diff"));
   assert.ok(types.includes("file-tree"));
+  assert.ok(types.includes("prototype"));
+  assert.ok(types.includes("tests"));
   assert.ok(types.includes("question-form"));
 });
 

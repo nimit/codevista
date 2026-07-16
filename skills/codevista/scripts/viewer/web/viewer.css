@@ -75,6 +75,8 @@ body {
 .wf-chrome-mobile{ justify-content:center; }
 .wf-notch{ width:60px; height:6px; border-radius:999px; background:var(--wf-line); }
 .is-skeleton .wf-screen *{ color:transparent !important; }
+/* prototype: a sandboxed iframe fills the device surface and scrolls inside it */
+.prototype-frame{ display:block; width:100%; height:100%; border:0; background:var(--wf-card); }
 
 /* ---- diff ---- */
 .diff-file{ font-family:ui-monospace,monospace; font-size:.85em; color:var(--wf-muted); margin-bottom:4px; }
@@ -149,6 +151,24 @@ body {
   border:1.4px solid var(--wf-line); background:var(--wf-card); color:inherit; }
 .qf-writein .qf-save:hover{ border-color:var(--wf-accent); color:var(--wf-accent); }
 
+/* ---- tests checklist ---- */
+.tests-block{ padding:0; overflow:hidden; }
+.tests-head{ display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:8px 12px; border-bottom:1.4px solid var(--wf-line); background:var(--wf-paper); }
+.tests-title{ font-weight:700; }
+.tests-count{ flex:none; font-size:.72em; text-transform:uppercase; letter-spacing:.04em;
+  padding:2px 8px; border-radius:999px; border:1.4px solid var(--wf-line);
+  color:var(--wf-muted); background:var(--wf-card); }
+.tests-list{ display:flex; flex-direction:column; }
+.tests-item{ display:flex; align-items:flex-start; gap:10px; padding:8px 12px; cursor:pointer;
+  border-top:1px solid var(--wf-line); transition:background .12s; }
+.tests-item:first-child{ border-top:none; }
+.tests-item:hover{ background:var(--wf-accent-soft); }
+.tests-check{ accent-color:var(--wf-accent); flex:none; width:15px; height:15px;
+  margin:2px 0 0; cursor:pointer; }
+.tests-text{ flex:1; min-width:0; line-height:1.5; }
+.tests-item.is-skipped .tests-text{ color:var(--wf-muted); text-decoration:line-through; }
+
 /* ---- tabs / columns ---- */
 .tab-bar{ display:flex; gap:4px; border-bottom:1.4px solid var(--wf-line); overflow-x:auto; }
 .tab-btn{ border:none; background:none; padding:8px 12px; cursor:pointer; color:var(--wf-muted); white-space:nowrap; }
@@ -170,19 +190,36 @@ body {
 .topbar button{ border:1.4px solid var(--wf-line); background:var(--wf-card); border-radius:8px; padding:6px 10px; cursor:pointer; color:inherit; }
 .reload-flash{ animation:flash .6s; } @keyframes flash{ from{ background:var(--wf-accent-soft);} to{ background:transparent; } }
 
+/* updated-block marker — lit for blocks the agent changed in the latest revision,
+   cleared once the next revision lands (see highlightUpdates in viewer-main.js). */
+.block-updated::after{ content:""; position:absolute; left:-14px; top:2px; bottom:2px;
+  width:3px; border-radius:2px; background:var(--wf-accent);
+  animation:block-updated-in .4s ease; transform-origin:top; }
+@keyframes block-updated-in{ from{ opacity:0; transform:scaleY(.3); } to{ opacity:1; transform:scaleY(1); } }
+@media (prefers-reduced-motion:reduce){ .block-updated::after{ animation:none; } }
+
 /* ---- comment composer + list ---- */
 .comment-list{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+.comment-list:empty{ display:none; } /* mounted on every block; collapse when unused */
 .comment{ background:var(--wf-card); border:1.4px solid var(--wf-line);
   border-left:3px solid var(--wf-accent); border-radius:var(--wf-radius);
   padding:8px 12px; font-size:13px; line-height:1.5; }
 .comment.resolved{ opacity:.6; border-left-color:var(--wf-ok); }
 .c-text{ white-space:pre-wrap; }
-.c-meta{ display:flex; align-items:center; gap:8px; margin-top:6px;
+.c-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin-top:6px;
   color:var(--wf-muted); font-size:.8em; }
 .c-tag{ display:inline-flex; align-items:center; padding:1px 8px; border-radius:999px;
   background:var(--wf-accent-soft); color:var(--wf-accent); font-weight:600; }
+/* human-only comments are not on the agent's action list — a quieter, neutral chip */
+.c-tag.c-tag-human{ background:none; border:1.4px solid var(--wf-line); color:var(--wf-muted); padding:0 7px; }
 .c-resolved{ display:inline-flex; align-items:center; color:var(--wf-ok); font-weight:600; }
 .comment.resolved .c-tag{ background:none; color:var(--wf-muted); }
+.c-actions{ margin-left:auto; display:flex; gap:2px; opacity:0; transition:opacity .12s; }
+.comment:hover .c-actions,.comment:focus-within .c-actions{ opacity:1; }
+.c-action{ font:inherit; cursor:pointer; color:var(--wf-muted); background:none;
+  border:none; padding:2px 7px; border-radius:6px; transition:color .12s, background .12s; }
+.c-action:hover{ color:var(--wf-accent); background:var(--wf-accent-soft); }
+.c-action.c-delete:hover{ color:var(--wf-del-ink); background:var(--wf-del-soft); }
 
 .comment-composer{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
 .comment-composer textarea{ width:100%; font:inherit; color:inherit; resize:vertical;

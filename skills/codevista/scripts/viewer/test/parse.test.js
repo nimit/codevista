@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tokenize, parseAttrs, locate, splitFrontmatter, duplicateIds } from "../src/parse.js";
-import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseApi, parseQuestionForm, parseTask } from "../src/blocks.js";
+import { LEAF_PARSERS, parseDiff, parseFileTree, parseDataModel, parseApi, parseQuestionForm, parseTask, parseTests } from "../src/blocks.js";
 import { parse } from "../src/parse.js";
 
 test("parseAttrs handles bare flags, key=value, and quoted values", () => {
@@ -140,6 +140,41 @@ test("parseQuestionForm reads selected flags and the answer write-in", () => {
   assert.equal(node.questions[0].options[0].recommended, true);
   assert.equal(node.questions[0].options[1].selected, false);
   assert.deepEqual(node.questions[1].options.map((o) => o.selected), [true, true, false]);
+});
+
+test("parseTests keeps items by default and reads the skip flag", () => {
+  const node = parseTests({ title: "Tests to add" }, [
+    '- "parses a tests fence"',
+    '- "renders skipped unchecked" skip',
+    '- "third one"',
+  ].join("\n"), "tt1");
+  assert.equal(node.type, "tests");
+  assert.equal(node.title, "Tests to add");
+  assert.deepEqual(node.items.map((t) => t.text), [
+    "parses a tests fence", "renders skipped unchecked", "third one",
+  ]);
+  assert.deepEqual(node.items.map((t) => t.skip), [false, true, false]);
+});
+
+test("tests is a registered leaf type reachable through parse()", () => {
+  assert.equal(typeof LEAF_PARSERS.tests, "function");
+  const { blocks } = parse('```tests\n- "one"\n```');
+  assert.equal(blocks[0].type, "tests");
+});
+
+test("prototype parses surface/label and keeps the body html verbatim", () => {
+  assert.equal(typeof LEAF_PARSERS.prototype, "function");
+  const { blocks } = parse([
+    '```prototype surface=mobile label="Sign-in"',
+    "<style>.b{color:red}</style>",
+    '<button class="b">Go</button>',
+    "```",
+  ].join("\n"));
+  assert.equal(blocks[0].type, "prototype");
+  assert.equal(blocks[0].surface, "mobile");
+  assert.equal(blocks[0].label, "Sign-in");
+  assert.match(blocks[0].html, /<style>\.b\{color:red\}<\/style>/);
+  assert.match(blocks[0].html, /<button class="b">Go<\/button>/);
 });
 
 test("locate maps a block id to its absolute source line span", () => {

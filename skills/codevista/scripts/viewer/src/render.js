@@ -1,5 +1,5 @@
 // src/render.js
-import { sanitizeHtml } from "./sanitize.js";
+import { sanitizeHtml, sanitizePrototype } from "./sanitize.js";
 
 export function escapeHtml(s) {
   return String(s ?? "")
@@ -32,6 +32,8 @@ export function renderBlock(node, opts) {
       return renderFileTree(node);
     case "wireframe":
       return renderWireframe(node, sani);
+    case "prototype":
+      return renderPrototype(node);
     case "diagram":
       return `<div class="diagram">${sani(node.html)}</div>`;
     case "mermaid":
@@ -48,6 +50,8 @@ export function renderBlock(node, opts) {
       return renderColumns(node, opts);
     case "question-form":
       return renderQuestionForm(node);
+    case "tests":
+      return renderTests(node);
     case "task":
       return renderTask(node);
     default:
@@ -108,6 +112,39 @@ function surfaceChrome(surface) {
   if (surface === "mobile")
     return `<div class="wf-chrome wf-chrome-mobile"><span class="wf-notch"></span></div>`;
   return "";
+}
+
+// Injected into every prototype frame so authored CSS can use the plan's palette
+// (via --wf-*) without being forced to. Mirrors the light/dark tokens in
+// viewer.css; the isolated iframe can't read the parent stylesheet, so it follows
+// the OS prefers-color-scheme rather than the viewer's manual theme toggle.
+const PROTOTYPE_TOKENS = `
+:root{--wf-paper:#fbfbf9;--wf-card:#fff;--wf-ink:#1f2430;--wf-muted:#6b7280;--wf-line:#dcdcd4;--wf-accent:#4f46e5;--wf-accent-fg:#fff;--wf-accent-soft:#ebeafe;--wf-warn:#b45309;--wf-ok:#15803d;--wf-radius:10px;}
+@media (prefers-color-scheme:dark){:root{--wf-paper:#15171c;--wf-card:#1c1f26;--wf-ink:#e8e9ed;--wf-muted:#9aa1ad;--wf-line:#2c303a;--wf-accent:#8b86f0;--wf-accent-fg:#15171c;--wf-accent-soft:#2a2960;--wf-warn:#f59e0b;--wf-ok:#4ade80;}}
+html,body{margin:0;}body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--wf-ink);background:var(--wf-paper);}
+`;
+
+// Assemble the self-contained document that goes into the iframe's srcdoc: a
+// locked-down CSP (no network — invariant #3), the palette tokens, then the
+// author's sanitized fragment. The whole string is escapeHtml'd by the caller;
+// the browser entity-decodes the srcdoc attribute before parsing, so `<`/`>`
+// (including inside <style>) round-trip correctly.
+function prototypeDoc(fragment) {
+  return '<!doctype html><html><head><meta charset="utf-8">'
+    + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:">'
+    + `<style>${PROTOTYPE_TOKENS}</style></head><body>${fragment}</body></html>`;
+}
+
+function renderPrototype(node) {
+  const label = node.label
+    ? `<div class="wf-frame-label">${escapeHtml(node.label)}</div>` : "";
+  const chrome = surfaceChrome(node.surface);
+  const srcdoc = escapeHtml(prototypeDoc(sanitizePrototype(node.html)));
+  return `<figure class="wf-figure">${label}
+    <div class="wf-surface wf-surface-${escapeHtml(node.surface)}" data-surface="${escapeHtml(node.surface)}">
+      ${chrome}
+      <div class="wf-screen"><iframe class="prototype-frame" title="${escapeHtml(node.label || "UI prototype")}" sandbox="" srcdoc="${srcdoc}"></iframe></div>
+    </div></figure>`;
 }
 
 function renderDataModel(node) {
@@ -201,6 +238,17 @@ function renderQuestionForm(node) {
     return `<div class="qf-q" data-q="${qi}" data-kind="${escapeHtml(q.kind)}"><div class="qf-text">${escapeHtml(q.text)}</div><div class="qf-options">${opts}${customOpt}</div>${writein}</div>`;
   }).join("");
   return `<div class="question-form wf-card"><div class="qf-title">${escapeHtml(node.title)}</div>${qs}</div>`;
+}
+
+function renderTests(node) {
+  const kept = node.items.filter((t) => !t.skip).length;
+  const items = node.items.map((t, i) =>
+    `<label class="tests-item${t.skip ? " is-skipped" : ""}">
+      <input type="checkbox" class="tests-check" data-index="${i}"${t.skip ? "" : " checked"}>
+      <span class="tests-text">${escapeHtml(t.text)}</span></label>`).join("");
+  return `<div class="tests-block wf-card">
+    <div class="tests-head"><span class="tests-title">${escapeHtml(node.title)}</span><span class="tests-count">${kept}/${node.items.length} kept</span></div>
+    <div class="tests-list">${items}</div></div>`;
 }
 
 function renderTask(node) {

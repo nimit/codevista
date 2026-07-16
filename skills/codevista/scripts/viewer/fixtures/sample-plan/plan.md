@@ -41,6 +41,23 @@ entity Session [modified]
 ```
 :::
 
+```prototype surface=mobile label="Refreshed session — final look"
+<style>
+  body{ display:flex; align-items:center; justify-content:center; height:100vh; }
+  .card{ width:80%; padding:24px; border-radius:16px; background:var(--wf-card);
+    border:1px solid var(--wf-line); box-shadow:0 8px 30px rgba(0,0,0,.08); text-align:center; }
+  .card h1{ margin:0 0 8px; font-size:20px; }
+  .card p{ margin:0 0 16px; color:var(--wf-muted); }
+  .pill{ display:inline-block; padding:4px 12px; border-radius:999px;
+    background:var(--wf-accent-soft); color:var(--wf-accent); font-size:13px; font-weight:600; }
+</style>
+<div class="card">
+  <h1>Welcome back</h1>
+  <p>We kept you signed in.</p>
+  <span class="pill">Session refreshed</span>
+</div>
+```
+
 ## Key change
 
 ```diff file=actions/auth.ts lang=ts summary="rotate refresh token on use"
@@ -60,8 +77,16 @@ note@4: new lookup is by hash, not raw token
 + lib/tokens.ts     sha256 + rotate helpers
 ```
 
+## Tests
+
+```tests title="Tests to add"
+- "rotates the refresh token and invalidates the old one on use"
+- "rejects a reused (already-rotated) refresh token" skip
+- "hashes tokens at rest (no plaintext in the store)"
+```
+
 :::question-form title="Open Questions"
-q single "Refresh token lifetime?"
+q single "Refresh token lifetime?" answer="oifo"
   - "30 days" recommended detail="matches current mobile expectation"
   - "7 days" detail="tighter, more re-logins"
 :::

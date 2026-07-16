@@ -43,6 +43,14 @@ types and their bodies:
   skeleton=true id=<id>`. Body is a semantic HTML fragment using ONLY `--wf-*`
   tokens + helper classes (see `wireframe.md`). No
   `<html>/<head>/<body>/<script>/<style>`.
+- **`prototype`** — `surface=browser|desktop|mobile label="…" id=<id>`. A
+  **high-fidelity, static** UI prototype: body is real HTML **plus its own
+  `<style>`**, rendered in a sandboxed, script-less, network-less iframe inside the
+  same device frame as `wireframe`. Use it (sparingly, for the key screen(s)) only
+  when a plan's value depends on how a specific new/changed UI actually looks;
+  `wireframe` stays the token-cheap default. No `<script>` / event handlers /
+  remote assets (inline or data-URI only) — all stripped. `--wf-*` tokens are
+  available inside the frame so a prototype can match the plan palette.
 - **`mermaid`** — `id=<id>`. Body is mermaid source. (Rendered by mermaid, which the viewer loads from a CDN — needs network; degrades to source text offline.)
 - **`diagram`** — `id=<id>`. Body is an HTML fragment using `.diagram-*`
   primitives and `--wf-*` tokens. (Author HTML only; CSS classes live in the
@@ -65,6 +73,13 @@ types and their bodies:
   annotation lines collected from trailing `note@<lines>: <text>` lines
   (lines = `12` or `12-18`).
 - **`callout`** — `tone=info|decision|warn|ok id=<id>`. Body is markdown.
+- **`tests`** — `title="…" id=<id>`. A checklist of tests the plan proposes to
+  write, one per line: `- "test description" [skip]`. Every item is **kept
+  (checked) by default**; the reviewer unchecks the redundant ones. Deselecting
+  writes a bare `skip` flag on that line via `POST /tests` (kept items stay
+  unflagged, so the list reads cleanly); at execution time the agent skips the
+  `skip`-flagged tests. Like `question-form`/`task`, the write-back addresses
+  top-level ids.
 
 ## 2. Container blocks — `:::` directive fences (may contain leaf blocks)
 
@@ -148,6 +163,7 @@ has a stable `id` (explicit `id=` attr, else `b<index>`), unique per document (s
                     annotations:[{lines, note}] }
 { type:'file-tree', id, entries:[{depth, change:'added'|'modified'|'removed'|'renamed'|null, path, to?, note?}] }
 { type:'wireframe', id, surface, label, skeleton:boolean, html:string }
+{ type:'prototype', id, surface, label, html:string }
 { type:'mermaid',   id, source:string }
 { type:'diagram',   id, html:string }
 { type:'data-model',id, entities:[{name, change, fields:[{name,type,was,change,note}]}] }
@@ -157,6 +173,7 @@ has a stable `id` (explicit `id=` attr, else `b<index>`), unique per document (s
 { type:'tabs',      id, tabs:[{label, blocks:Node[]}] }
 { type:'columns',   id, wide:boolean, columns:[{label, blocks:Node[]}] }
 { type:'question-form', id, title, questions:[{kind, text, answer, options:[{label,detail,recommended,selected}]}] }
+{ type:'tests',     id, title, items:[{text, skip:boolean}] }
 { type:'task', id, status:'pending'|'running'|'done'|'blocked', risk:'normal'|'high',
                     title, outcome, verify, scope, dependsOn:[ids], constraints, notes }
 ```

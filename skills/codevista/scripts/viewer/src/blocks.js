@@ -150,6 +150,20 @@ export function parseQuestionForm(attrs, body, id) {
   return { type: "question-form", id, title: attrs.title || "Open Questions", questions };
 }
 
+// A checklist of tests the plan proposes to write. Every item is KEPT (selected)
+// by default; the reviewer deselects the ones that are redundant. Default-kept
+// means we persist only the exceptions: a deselected item carries a bare `skip`
+// flag on its line (toggled by the server's applyTestSelection), so the plain
+// list stays readable. Body grammar: `- "test description" [skip]` per line.
+export function parseTests(attrs, body, id) {
+  const items = [];
+  for (const raw of body.split(/\r?\n/)) {
+    const m = raw.match(/^\s*-\s*"([^"]+)"(.*)$/);
+    if (m) items.push({ text: m[1], skip: /\bskip\b/.test(m[2]) });
+  }
+  return { type: "tests", id, title: attrs.title || "Tests to add", items };
+}
+
 export function parseTask(attrs, body, id) {
   const fields = { title: "", outcome: "", verify: "", scope: "", constraints: "", notes: "" };
   let dependsOn = [];
@@ -180,9 +194,18 @@ export const LEAF_PARSERS = {
   "file-tree": parseFileTree,
   "data-model": parseDataModel,
   api: parseApi,
+  tests: parseTests,
   wireframe: (attrs, body, id) => ({
     type: "wireframe", id, surface: attrs.surface || "browser",
     label: attrs.label || "", skeleton: attrs.skeleton === "true", html: body,
+  }),
+  // High-fidelity static UI prototype — same device surfaces as wireframe, but the
+  // body is real HTML+CSS rendered in a sandboxed iframe (see renderPrototype). The
+  // body is kept raw here; sanitizing/framing happens at render so the raw fence
+  // stays human-readable HTML in the plan file.
+  prototype: (attrs, body, id) => ({
+    type: "prototype", id, surface: attrs.surface || "browser",
+    label: attrs.label || "", html: body,
   }),
   mermaid: (attrs, body, id) => ({ type: "mermaid", id, source: body }),
   diagram: (attrs, body, id) => ({ type: "diagram", id, html: body }),

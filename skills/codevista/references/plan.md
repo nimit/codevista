@@ -16,12 +16,18 @@ rendered local plan plus its URL.
 3. Write the plan to `plans/<slug>/plan.md` (one directory per plan, so its
    status and `comments.json` never collide with other plans) using the FORMAT grammar: markdown for
    prose; fenced blocks for `diff`, `data-model`, `api`, `file-tree`, `wireframe`,
-   `mermaid`, `annotated-code`; `:::columns`/`:::tabs`/`:::callout`/`:::question-form`
+   `mermaid`, `annotated-code`, `tests`; `:::columns`/`:::tabs`/`:::callout`/`:::question-form`
    containers; and an ordered set of `:::task` blocks for the implementation work
-   (see the task-decomposition guidance in `document-quality.md`). State the testing
+   (see the task-decomposition guidance in `document-quality.md`). For UI work, use
+   `wireframe` tokens for structure by default; reach for a `prototype` block (real
+   HTML+CSS in a sandboxed frame) only for the key screen(s) whose actual look
+   matters — it costs more tokens, so don't prototype everything. State the testing
    posture once in the overview: TDD where a test harness exists for the area;
-   otherwise implement against the task's `verify`. Content only — never author
-   HTML/CSS for the page chrome.
+   otherwise implement against the task's `verify`. When the plan proposes specific
+   tests, list them in a `tests` block so the reviewer can deselect any that are
+   redundant (deselected ones are marked `skip` and not written at execution time).
+   Content only — never author the page chrome itself (the `prototype` block is the
+   one sanctioned place for hand-written HTML/CSS, and only as in-content UI).
 4. Start the viewer (background) and report the URL:
    `node scripts/viewer/bin/server.js plans/<slug>/plan.md --open`
    (`scripts/viewer/…` is inside this skill's directory; keep the document path

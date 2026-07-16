@@ -3,6 +3,7 @@ import { parse } from "/src/parse.js";
 import { render } from "/src/render.js";
 import { mountComments } from "/src/comments-client.js";
 import { mountAnswers } from "/src/answers-client.js";
+import { mountTests } from "/src/tests-client.js";
 import { marked } from "/vendor/marked.esm.js";
 import DOMPurify from "/vendor/purify.es.mjs";
 
@@ -52,11 +53,14 @@ async function load(flash) {
     return;
   }
   doc.dataset.loaded = "1";
-  const { source } = data;
+  const { source, path } = data;
   const { meta, blocks } = parse(source);
   document.getElementById("title").textContent = meta.title || "Visual plan";
   document.title = meta.title || "Visual plan";
   doc.innerHTML = render(blocks, { md, sanitize });
+  // Highlight blocks changed since the last revision — BEFORE the mounts below,
+  // which append comment tabs/lists into the blocks (that would pollute the diff).
+  highlightUpdates(path || "default");
   if (flash) {
     doc.classList.add("reload-flash");
     setTimeout(() => doc.classList.remove("reload-flash"), 600);
@@ -65,6 +69,59 @@ async function load(flash) {
   wireTabs();
   await mountComments(doc);
   mountAnswers(doc);
+  mountTests(doc);
+}
+
+// Cheap, stable string hash (djb2) so the snapshot in localStorage stays bounded.
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return h.toString(36);
+}
+
+// Mark blocks whose rendered content is new since the previous revision so a
+// reviewer can find what the agent changed after acting on their comments.
+// Matching is by content hash, NOT block id: ids are positional (parse.js), so an
+// unchanged block that merely shifted when another was inserted/removed would
+// otherwise look new. Only the most recent revision's changes are lit; they clear
+// when the next revision lands. A plain refresh (no content change) re-applies the
+// remembered set so the highlight isn't lost before the reviewer has looked.
+function highlightUpdates(pathKey) {
+  const SKEY = "lv-snap:" + pathKey, HKEY = "lv-hl:" + pathKey;
+  const blocks = [...doc.querySelectorAll(".block")];
+  const hashes = blocks.map((b) => hashStr(b.innerHTML));
+
+  let snap;
+  try { snap = JSON.parse(localStorage.getItem(SKEY) || "null"); } catch { snap = null; }
+  if (!Array.isArray(snap)) {                       // first view: baseline only
+    localStorage.setItem(SKEY, JSON.stringify(hashes));
+    localStorage.setItem(HKEY, "[]");
+    return;
+  }
+
+  // Multiset diff: a current block is "changed" only if its content wasn't present
+  // (with multiplicity) in the previous snapshot.
+  const counts = new Map();
+  for (const h of snap) counts.set(h, (counts.get(h) || 0) + 1);
+  const changed = [];
+  blocks.forEach((b, i) => {
+    const n = counts.get(hashes[i]) || 0;
+    if (n > 0) counts.set(hashes[i], n - 1); else changed.push({ b, h: hashes[i] });
+  });
+
+  if (changed.length) {                             // a revision landed
+    changed.forEach((c) => c.b.classList.add("block-updated"));
+    localStorage.setItem(SKEY, JSON.stringify(hashes));
+    localStorage.setItem(HKEY, JSON.stringify(changed.map((c) => c.h)));
+  } else {                                          // no change (refresh): re-apply
+    let hl; try { hl = JSON.parse(localStorage.getItem(HKEY) || "[]"); } catch { hl = []; }
+    const hc = new Map();
+    for (const h of hl) hc.set(h, (hc.get(h) || 0) + 1);
+    blocks.forEach((b, i) => {
+      const n = hc.get(hashes[i]) || 0;
+      if (n > 0) { hc.set(hashes[i], n - 1); b.classList.add("block-updated"); }
+    });
+  }
 }
 
 function wireTabs() {

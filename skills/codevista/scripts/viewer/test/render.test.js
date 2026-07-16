@@ -29,6 +29,26 @@ test("wireframe wraps html in the correct surface frame and sanitizes", () => {
   assert.doesNotMatch(html, /onclick/); // sanitized
 });
 
+test("prototype renders a sandboxed iframe: keeps <style>, strips scripts/handlers, locks CSP", () => {
+  const { blocks } = parse([
+    '```prototype surface=mobile label="Sign-in"',
+    "<style>.a > .b{color:red}</style>",
+    '<div onclick="x()">Hi<script>alert(1)</script></div>',
+    "```",
+  ].join("\n"));
+  const html = render(blocks, { md });
+  assert.match(html, /data-type="prototype"/);
+  assert.match(html, /class="wf-surface wf-surface-mobile"/);   // reuses device frame
+  assert.match(html, /class="prototype-frame"[^>]*sandbox=""/); // empty sandbox
+  assert.match(html, /Content-Security-Policy/);                // network locked down
+  // author CSS survives (child combinator round-trips through srcdoc escaping)
+  assert.match(html, /\.a &gt; \.b\{color:red\}/);
+  assert.match(html, /&lt;style&gt;/);
+  // scripts and event handlers are stripped even before the sandbox
+  assert.doesNotMatch(html, /&lt;script/);
+  assert.doesNotMatch(html, /onclick/);
+});
+
 test("file-tree renders change glyphs and notes", () => {
   const { blocks } = parse("```file-tree\n+ a.ts  new\n~ b.ts  edit\n```");
   const html = render(blocks, { md });
@@ -72,6 +92,22 @@ test("task renders a status badge, title, and outcome/verify/deps rows", () => {
   assert.match(html, /task-key">verify<\/span><span class="task-val">npm test auth/);
   assert.match(html, /task-risk/);
   assert.match(html, /<code>session-store<\/code>/);
+});
+
+test("tests block renders a kept/total count and checks kept items, unchecks skipped", () => {
+  const { blocks } = parse([
+    '```tests title="Tests to add"',
+    '- "parses a tests fence"',
+    '- "renders skipped items unchecked" skip',
+    "```",
+  ].join("\n"));
+  const html = render(blocks, { md });
+  assert.match(html, /data-type="tests"/);
+  assert.match(html, /tests-count">1\/2 kept/);
+  // kept item is checked; skipped item is unchecked + is-skipped
+  assert.match(html, /tests-item">\s*<input type="checkbox" class="tests-check" data-index="0" checked/);
+  assert.match(html, /tests-item is-skipped">\s*<input type="checkbox" class="tests-check" data-index="1">/);
+  assert.doesNotMatch(html, /data-index="1"[^>]*checked/);
 });
 
 test("columns marks wide and includes column labels", () => {

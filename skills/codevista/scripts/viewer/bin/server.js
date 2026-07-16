@@ -89,6 +89,32 @@ export function applyAnswer(source, { blockId, questionIndex, kind, selected = [
   return lines.join("\n");
 }
 
+// Keep or skip a single test in a `tests` block by toggling the bare `skip` flag
+// on its list line (located by id via locate()). Tests are kept by default, so
+// `skip=true` writes the flag and `skip=false` removes it. Pure + exported so it
+// is unit-testable; returns null when blockId does not resolve to a `tests` block
+// OR index does not match a test item, so the caller surfaces an error instead of
+// a silent no-op (the same faithfulness bar as applyAnswer / applyStatus).
+export function applyTestSelection(source, { blockId, index, skip }) {
+  const loc = locate(source, blockId);
+  if (!loc || loc.type !== "tests") return null;
+  const lines = source.split(/\r?\n/);
+  let itemIdx = 0, target = -1;
+  for (let i = loc.startLine + 1; i <= loc.endLine; i++) {
+    if (!/^\s*-\s*"/.test(lines[i])) continue;
+    if (itemIdx === index) { target = i; break; }
+    itemIdx++;
+  }
+  if (target < 0) return null;
+  // Toggle `skip` only in the tail AFTER the quoted description — a bare
+  // toggleFlag would also strip the word "skip" out of the test text itself.
+  const m = lines[target].match(/^(\s*-\s*"[^"]*")(.*)$/);
+  if (!m) return null;
+  const tail = m[2].replace(/\s*\bskip\b/g, "");
+  lines[target] = m[1] + (skip ? `${tail} skip` : tail);
+  return lines.join("\n");
+}
+
 // Advance a :::task's status by rewriting the `status=` token on its opening
 // directive line (located by id via locate()). Pure + exported so it is
 // unit-testable; the CLI (--set-status) validates the allowed status set, so this
@@ -185,9 +211,15 @@ export function createServer({ srcPath, kind }) {
       req.on("end", () => {
         let c; try { c = JSON.parse(raw); } catch { return send(res, 400, "bad json"); }
         const list = readComments(srcPath);
-        const i = list.findIndex((x) => x.id === c.id);
-        if (i >= 0) list[i] = { ...list[i], ...c }; else list.push(c);
-        writeComments(srcPath, list);
+        // `{ id, deleted:true }` removes a comment; anything else upserts by id
+        // (a new comment appends; an existing id — edit or resolve — merges).
+        if (c && c.deleted) {
+          writeComments(srcPath, list.filter((x) => x.id !== c.id));
+        } else {
+          const i = list.findIndex((x) => x.id === c.id);
+          if (i >= 0) list[i] = { ...list[i], ...c }; else list.push(c);
+          writeComments(srcPath, list);
+        }
         send(res, 200, JSON.stringify({ ok: true }), "application/json");
       });
       return;
@@ -210,6 +242,30 @@ export function createServer({ srcPath, kind }) {
           const updated = applyAnswer(source, a);
           if (updated === null)
             return send(res, 409, JSON.stringify({ error: "no question-form block/question with that id and index" }), "application/json");
+          writeFileSync(srcPath, updated);
+          send(res, 200, JSON.stringify({ ok: true }), "application/json");
+        } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }
+      });
+      return;
+    }
+    if (url === "/tests" && req.method === "POST") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        let t; try { t = JSON.parse(raw); } catch { return send(res, 400, "bad json"); }
+        if (typeof t?.blockId !== "string" || !Number.isInteger(t.index) || t.index < 0)
+          return send(res, 400, JSON.stringify({ error: "expected { blockId: string, index: int >= 0, skip: bool }" }), "application/json");
+        try {
+          const source = readFileSync(srcPath, "utf8");
+          // same faithfulness bar as /answers: a duplicated id would silently
+          // write to the first match, so refuse instead.
+          if (duplicateIds(source).includes(t.blockId))
+            return send(res, 409, JSON.stringify({ error: `block id "${t.blockId}" is not unique` }), "application/json");
+          // toggle the item's skip flag in place — fs.watch turns this into an SSE
+          // reload (the originating tab suppresses that one; see tests-client.js).
+          const updated = applyTestSelection(source, { ...t, skip: !!t.skip });
+          if (updated === null)
+            return send(res, 409, JSON.stringify({ error: "no tests block/item with that id and index" }), "application/json");
           writeFileSync(srcPath, updated);
           send(res, 200, JSON.stringify({ ok: true }), "application/json");
         } catch { send(res, 500, JSON.stringify({ error: "write failed" }), "application/json"); }

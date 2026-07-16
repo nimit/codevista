@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import net from "node:net";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createServer, resolveCommentsPath, applyAnswer, applyStatus, inferKind, isLoopbackHost } from "../bin/server.js";
+import { createServer, resolveCommentsPath, applyAnswer, applyStatus, applyTestSelection, inferKind, isLoopbackHost } from "../bin/server.js";
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "server.js");
 
@@ -50,6 +50,75 @@ test("serves /content and round-trips /comments to sidecar", async () => {
   assert.equal(got[0].text, "fix this");
   assert.ok(existsSync(resolveCommentsPath(src)));
   assert.match(readFileSync(resolveCommentsPath(src), "utf8"), /fix this/);
+});
+
+test("POST /comments with { deleted:true } removes a comment from the sidecar", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, "# Hello\n\nbody");
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (body) => fetch(`${base}/comments`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+
+  await post({ id: "c_1", blockId: "b0", text: "one", status: "open", target: "agent" });
+  await post({ id: "c_2", blockId: "b0", text: "two", status: "open", target: "human" });
+  // edit/resolve is an upsert by id; a fresh id would have appended a third
+  await post({ id: "c_1", blockId: "b0", text: "one edited", status: "resolved", target: "agent" });
+  let got = await (await fetch(`${base}/comments`)).json();
+  assert.equal(got.length, 2);
+  assert.equal(got.find((c) => c.id === "c_1").text, "one edited");
+  assert.equal(got.find((c) => c.id === "c_1").status, "resolved");
+
+  await post({ id: "c_1", deleted: true });
+  got = await (await fetch(`${base}/comments`)).json();
+  assert.deepEqual(got.map((c) => c.id), ["c_2"]);
+});
+
+test("applyTestSelection toggles the skip flag on the targeted item only", () => {
+  const src = [
+    '```tests title="Tests to add"',
+    '- "keep me"',
+    '- "skip me"',
+    '- "and me"',
+    "```",
+  ].join("\n");
+  // skip the middle item
+  const out = applyTestSelection(src, { blockId: "b0", index: 1, skip: true });
+  assert.match(out, /- "keep me"\n/);
+  assert.match(out, /- "skip me" skip/);
+  assert.doesNotMatch(out, /- "and me" skip/);
+  // re-keeping removes the flag again (default-kept round-trips cleanly)
+  const back = applyTestSelection(out, { blockId: "b0", index: 1, skip: false });
+  assert.equal(back, src);
+  // unknown id or out-of-range index refuses instead of a silent no-op
+  assert.equal(applyTestSelection(src, { blockId: "nope", index: 0, skip: true }), null);
+  assert.equal(applyTestSelection(src, { blockId: "b0", index: 9, skip: true }), null);
+});
+
+test("POST /tests writes the skip flag back into the plan file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lv-"));
+  const src = join(dir, "x.plan.md");
+  writeFileSync(src, ['# T', '', '```tests', '- "alpha"', '- "beta"', '```'].join("\n"));
+  const server = await start(src);
+  after(() => server.close());
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = (body) => fetch(`${base}/tests`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+
+  // tests fence is block b1 — md "# T" is b0
+  const r = await post({ blockId: "b1", index: 1, skip: true });
+  assert.equal((await r.json()).ok, true);
+  assert.match(readFileSync(src, "utf8"), /- "beta" skip/);
+
+  // out-of-range item is refused and the file is untouched
+  const before = readFileSync(src, "utf8");
+  const bad = await post({ blockId: "b1", index: 9, skip: true });
+  assert.equal(bad.status, 409);
+  assert.equal(readFileSync(src, "utf8"), before);
 });
 
 test("POST /answers writes selected + answer back into the plan file", async () => {
