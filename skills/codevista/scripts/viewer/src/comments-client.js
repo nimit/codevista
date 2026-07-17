@@ -28,13 +28,25 @@ async function deleteComment(id) {
 }
 function newId() { return "c_" + Math.random().toString(36).slice(2, 10); }
 
+// Open comments whose block is no longer in the document — a rewrite dropped or
+// renamed it. Such a comment can't render (mountComments only walks live
+// blocks), so it would otherwise be invisible-yet-immortal: unreachable from the
+// UI, yet re-read from the sidecar and fed to the agent as stale feedback every
+// round. Pure so it's testable without a DOM; the caller tombstones the result.
+export function orphanedComments(comments, blockIds) {
+  const present = blockIds instanceof Set ? blockIds : new Set(blockIds);
+  return comments.filter((c) => c.status !== "resolved" && !present.has(c.blockId));
+}
+
 export async function mountComments(root) {
   const comments = await getComments();
   const byBlock = {};
   for (const c of comments) (byBlock[c.blockId] = byBlock[c.blockId] || []).push(c);
 
+  const present = new Set();
   root.querySelectorAll(".block").forEach((block) => {
     const id = block.dataset.blockId;
+    present.add(id);
     const list = document.createElement("div");
     list.className = "comment-list";
 
@@ -51,6 +63,12 @@ export async function mountComments(root) {
     block.append(tab, list);
     refreshTab(ctx);
   });
+
+  // Tombstone (don't delete) orphaned comments — they stay recoverable in the
+  // sidecar, and the merge-by-id POST is idempotent if two tabs race here.
+  await Promise.all(
+    orphanedComments(comments, present).map((c) => postComment({ ...c, status: "resolved" })),
+  );
 }
 
 function refreshTab(ctx) {

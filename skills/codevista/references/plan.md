@@ -36,9 +36,16 @@ rendered local plan plus its URL.
    when you edit the file.
 5. Ask the user to review and approve at that URL. This is the approval gate.
 6. To incorporate feedback: read `plans/<slug>/comments.json` (or the path the
-   server printed). Each comment has `{blockId, text, target, status, quote}`. Act
-   on `target:"agent"` comments, edit `plans/<slug>/plan.md` (the page
-   reloads), and treat `target:"human"` as context. Re-read before major edits.
+   server printed). Each comment has `{id, blockId, text, target, status, quote}`.
+   Act on `target:"agent"` comments and treat `target:"human"` as context; skip any
+   already `status:"resolved"`. Re-read before major edits. As you incorporate a
+   comment, mark it resolved so it doesn't resurface next round (the server merges
+   by id, and resolved comments render greyed rather than disappearing):
+   `curl -s -X POST http://127.0.0.1:<port>/comments -d '{"id":"<id>","status":"resolved"}' >/dev/null`.
+   Resolve the incorporated comments first, then edit `plans/<slug>/plan.md` last —
+   that write is what triggers the reload, so the page repaints with the freshly
+   greyed comments. (Comments left on blocks you rewrote away are auto-resolved by
+   the viewer on reload, so stale feedback never lingers.)
 
 ## Discipline
 
