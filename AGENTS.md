@@ -135,3 +135,17 @@ files are committed verbatim (offline-first) — they are not a build artifact.
 
 `comments.json` (the reviewer-feedback sidecar), `plans/`, and `recaps/` are
 written at runtime and are gitignored.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues via the `gh` CLI. See `.agents/config/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `.agents/config/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `.agents/CONTEXT.md` + `.agents/adr/`. See `.agents/config/domain.md`.
